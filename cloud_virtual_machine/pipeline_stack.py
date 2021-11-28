@@ -62,9 +62,9 @@ class PipelineStack(cdk.Stack):
                                                 )
                                 )
 
-        source_output = codepipeline.Artifact()
+        file_assets_bucket_name="cdk-${Qualifier}-assets-${AWS::AccountId}-${AWS::Region}"
         CfnOutput(self, 'ArtifactUrl',
                   description='The artifact attribute of the Amazon Simple Storage Service (Amazon S3) URL of the '
                               'artifact, such as https.',
-                  value=source_output.url,
+                  value=file_assets_bucket_name,
                   )
