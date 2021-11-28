@@ -2,6 +2,8 @@ notes.txt
 
 .idea/
 
+venv/
+
 *.swp
 package-lock.json
 __pycache__
@@ -11,6 +13,7 @@ __pycache__
 *.egg-info
 
 # CDK asset staging directory
+cdk.context.json
 .cdk.staging
 cdk.out
 =======
