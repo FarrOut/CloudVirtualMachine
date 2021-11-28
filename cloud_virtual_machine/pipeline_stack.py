@@ -50,6 +50,7 @@ class PipelineStack(cdk.Stack):
 
         pipeline = CodePipeline(self, "Sandpipe",
                                 pipeline_name="Sandpipe",
+                                cross_account_keys=True,
                                 synth=ShellStep("Synth",
                                                 input=CodePipelineSource.connection(
                                                     "FarrOut/CloudVirtualMachine", "main",
@@ -60,3 +61,10 @@ class PipelineStack(cdk.Stack):
                                                           "cdk synth"]
                                                 )
                                 )
+
+        source_output = codepipeline.Artifact()
+        CfnOutput(self, 'ArtifactUrl',
+                  description='The artifact attribute of the Amazon Simple Storage Service (Amazon S3) URL of the '
+                              'artifact, such as https.',
+                  value=source_output.url,
+                  )
