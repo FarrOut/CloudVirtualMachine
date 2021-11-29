@@ -111,16 +111,18 @@ class InstanceStack(cdk.Stack):
                 "logging": ['install_cw_agent'],
                 "testing": ['proof-of-life'],
                 'connectivity': ['mosh'],
+                'security': ['install_ssm_agent'],
             },
             configs={
-                '': ec2.InitConfig([
-                    ec2.InitPackage.apt(
-                        package_name='mosh',
+                # Template
+                # '': ec2.InitConfig([]),
+                #
+                'install_ssm_agent': ec2.InitConfig([
+                    ec2.InitPackage.rpm(
+                        location='https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_arm64/amazon-ssm-agent.rpm',
                     ),
-                    # TODO Allow MOSH traffic
-                    #     https://linuxhandbook.com/mosh/
-                    #     https://mosh.org/#getting
                 ]),
+
                 'proof-of-life': ec2.InitConfig([
                     ec2.InitFile.from_string("~/ifyouseethisitsworking",
                                              "This got written during instance startup"),

@@ -4,17 +4,15 @@ import logging
 # the CDK's core module.  The following line also imports it as `core` for use
 # with examples from the CDK Developer's Guide, which are in the process of
 # being updated to use `cdk`.  You may delete this import if you don't need it.
-from aws_cdk import core
 from aws_cdk import (core as cdk,
-                     aws_ec2 as ec2,
-                     pipelines,
-                     aws_codepipeline as codepipeline,
-                     aws_codepipeline_actions as cpactions,
                      aws_secretsmanager,
                      )
-from aws_cdk.core import CfnOutput, SecretValue
+from aws_cdk.core import CfnOutput, Stage
 from aws_cdk.pipelines import CodePipeline, CodePipelineSource, ShellStep
 import boto3, json
+
+from cloud_virtual_machine.pipeline.package_factory_stage import PackageFactoryStage
+from cloud_virtual_machine.pipeline.rpm_factory_stack import RpmFactoryStack
 
 secretsmanager = boto3.client('secretsmanager')
 
@@ -53,7 +51,8 @@ class PipelineStack(cdk.Stack):
                                 cross_account_keys=True,
                                 synth=ShellStep("Synth",
                                                 input=CodePipelineSource.connection(
-                                                    "FarrOut/CloudVirtualMachine", "main",
+                                                    # TODO revert branch to 'main'
+                                                    "FarrOut/CloudVirtualMachine", "feature/rpm",
                                                     connection_arn=connection_arn_,
                                                 ),
                                                 commands=["npm install -g aws-cdk",
@@ -61,3 +60,6 @@ class PipelineStack(cdk.Stack):
                                                           "cdk synth"]
                                                 )
                                 )
+
+        # Add stage to deploy package factory
+        pipeline.add_stage(PackageFactoryStage(self, 'PackageFactory'))
