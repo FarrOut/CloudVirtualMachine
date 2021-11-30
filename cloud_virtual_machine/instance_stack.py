@@ -4,6 +4,7 @@ from aws_cdk import (core as cdk,
                      aws_s3_assets as assets,
                      aws_autoscaling as autoscaling,
                      aws_logs as logs,
+                     aws_s3 as s3,
                      )
 
 # For consistency with other languages, `cdk` is the preferred import name for
@@ -14,7 +15,7 @@ from aws_cdk import core
 # from pipeline_stage import WorkshopPipelineStage
 import os
 
-from aws_cdk.core import Duration
+from aws_cdk.core import Duration, DefaultStackSynthesizer
 
 
 class InstanceStack(cdk.Stack):
@@ -42,6 +43,8 @@ class InstanceStack(cdk.Stack):
                                                            )
         outer_perimeter_security_group.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(22),
                                                         "allow ssh access from the world")
+        outer_perimeter_security_group.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.udp_range(60000, 61000),
+                                                        "allow mosh access from the world")
 
         # =====================
         # STORAGE
@@ -110,10 +113,10 @@ class InstanceStack(cdk.Stack):
                 # Applies the configs below in this order
                 "logging": ['install_cw_agent'],
                 "testing": ['proof-of-life'],
-                'connectivity': ['mosh'],
+                'connectivity': ['install_mosh'],
             },
             configs={
-                '': ec2.InitConfig([
+                'install_mosh': ec2.InitConfig([
                     ec2.InitPackage.apt(
                         package_name='mosh',
                     ),
