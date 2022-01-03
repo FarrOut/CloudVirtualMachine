@@ -14,7 +14,7 @@ rsa_env = cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='af-s
 euro_env = cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='eu-central-1')
 
 # PipelineStack(app, "PipelineStack", env=default_env)
-InstanceStack(app, "InstanceStack", env=euro_env)
+InstanceStack(app, "InstanceStack", env=default_env)
 # LoggingStack(app, "LoggingStack", env=euro_env)
 
 app.synth()

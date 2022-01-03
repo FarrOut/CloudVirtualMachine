@@ -25,7 +25,7 @@ class InstanceStack(Stack):
         # =====================
         # SECURITY
         # =====================
-        key_name = 'masterkey-frankfurt'
+        key_name = 'masterkey'
         outer_perimeter_security_group = ec2.SecurityGroup(self, "SecurityGroup",
                                                            vpc=vpc,
                                                            description="Allow ssh access to ec2 instances",
@@ -79,11 +79,12 @@ class InstanceStack(Stack):
 
         image = ubuntu_image
 
-        CfnOutput(self, 'MachineImageOutput',
+        if debug_mode:
+            CfnOutput(self, 'MachineImageOutput',
                       value=str(image.get_image(self).image_id),
                       description='MachineImageId',
                       )
-        CfnOutput(self, 'MachineImageUserDataOutput',
+            CfnOutput(self, 'MachineImageUserDataOutput',
                       value=str(image.get_image(self).user_data.render()),
                       description='MachineImage UserData',
                       )
@@ -114,34 +115,23 @@ class InstanceStack(Stack):
                 ]),
                 'install_vnc': ec2.InitConfig([
                     # https://www.makeuseof.com/install-ubuntu-vnc-server-linux/
+                    # https://www.24x7serversupport.com/24x7serversupport-blog/install-vnc-server-on-ubuntu-18/
 
-                    # ec2.InitPackage.apt(
-                    #     package_name='xfce4',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='xfce4-goodies',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='tightvncserver',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='ubuntu-desktop',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='gnome-panel',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='gnome-settings-daemon',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='metacity',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='nautilus',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='gnome-terminal',
-                    # ),
+                    ec2.InitPackage.apt(
+                        package_name='xfce4',
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='xfce4-goodies',
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='xorg',
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='dbus-x11',
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='x11-xserver-utils',
+                    ),
                 ]),
                 'install_mosh': ec2.InitConfig([
                     ec2.InitPackage.apt(
@@ -176,7 +166,7 @@ class InstanceStack(Stack):
                                 user_data_causes_replacement=True,
                                 vpc=vpc,
                                 instance_type=ec2.InstanceType.of(
-                                    ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.SMALL),
+                                    ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.LARGE),
                                 machine_image=image,
                                 key_name=key_name,
                                 security_group=outer_perimeter_security_group,
@@ -193,7 +183,7 @@ class InstanceStack(Stack):
                                     ignore_failures=debug_mode,
 
                                     # Optional, how long the installation is expected to take (5 minutes by default)
-                                    timeout=Duration.minutes(5),
+                                    timeout=Duration.minutes(10),
 
                                     # Optional, whether to include the --url argument when running cfn-init and cfn-signal commands (false by default)
                                     include_url=False,
@@ -252,13 +242,13 @@ class InstanceStack(Stack):
         # To have a warm pool ready for the day ahead
 
         CfnOutput(self, 'InstancePublicDNSname',
-                      value=instance.instance_public_dns_name,
-                      description='Publicly-routable DNS name for this instance.',
-                      )
+                  value=instance.instance_public_dns_name,
+                  description='Publicly-routable DNS name for this instance.',
+                  )
 
         user = 'ubuntu'
         ssh_command = 'ssh' + ' -i ' + key_name + '.pem ' + user + '@' + instance.instance_public_dns_name
         CfnOutput(self, 'InstanceSSHcommand',
-                      value=ssh_command,
-                      description='Command to SSH into instance.',
-                      )
+                  value=ssh_command,
+                  description='Command to SSH into instance.',
+                  )
