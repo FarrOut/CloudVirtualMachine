@@ -1,21 +1,12 @@
 import logging
 
-# For consistency with other languages, `cdk` is the preferred import name for
-# the CDK's core module.  The following line also imports it as `core` for use
-# with examples from the CDK Developer's Guide, which are in the process of
-# being updated to use `cdk`.  You may delete this import if you don't need it.
-from aws_cdk import core
-from aws_cdk import (core as cdk,
-                     aws_ec2 as ec2,
-                     pipelines,
-                     aws_codepipeline as codepipeline,
-                     aws_codepipeline_actions as cpactions,
-                     aws_secretsmanager,
-                     )
-from aws_cdk.core import CfnOutput, SecretValue
-from aws_cdk.pipelines import CodePipeline, CodePipelineSource, ShellStep
-import boto3, json
+import boto3
+import json
 
+import aws_cdk as cdk
+from aws_cdk import aws_secretsmanager
+from aws_cdk.pipelines import CodePipeline, CodePipelineSource, ShellStep
+from constructs import Construct
 secretsmanager = boto3.client('secretsmanager')
 
 
@@ -24,7 +15,7 @@ secretsmanager = boto3.client('secretsmanager')
 
 class PipelineStack(cdk.Stack):
 
-    def __init__(self, scope: cdk.Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         logger = logging.getLogger()
@@ -38,10 +29,10 @@ class PipelineStack(cdk.Stack):
         )['SecretString'])
         connection_arn_ = connection_secret_value['FarrOut']
 
-        CfnOutput(self, 'ConnectionArn',
-                  description='ConnectionArn',
-                  value=connection_arn_,
-                  )
+        cdk.CfnOutput(self, 'ConnectionArn',
+                      description='ConnectionArn',
+                      value=connection_arn_,
+                      )
 
         if connection_secret.secret_value is None:
             logger.warning('Unable to retrieve GitHub Connection!')

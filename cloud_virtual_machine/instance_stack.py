@@ -1,26 +1,16 @@
-from aws_cdk import (core as cdk,
-                     aws_ec2 as ec2,
-                     aws_secretsmanager as secretsmanager,
-                     aws_s3_assets as assets,
-                     aws_autoscaling as autoscaling,
-                     aws_logs as logs,
-                     aws_s3 as s3,
-                     )
+from aws_cdk import (
 
-# For consistency with other languages, `cdk` is the preferred import name for
-# the CDK's core module.  The following line also imports it as `core` for use
-# with examples from the CDK Developer's Guide, which are in the process of
-# being updated to use `cdk`.  You may delete this import if you don't need it.
-from aws_cdk import core
-# from pipeline_stage import WorkshopPipelineStage
-import os
-
-from aws_cdk.core import Duration, DefaultStackSynthesizer
+    Duration,
+    Stack,
+    aws_ec2 as ec2,
+    aws_logs as logs, CfnOutput,
+)
+from constructs import Construct
 
 
-class InstanceStack(cdk.Stack):
+class InstanceStack(Stack):
 
-    def __init__(self, scope: cdk.Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         debug_mode = True  # TODO debugging
@@ -35,7 +25,7 @@ class InstanceStack(cdk.Stack):
         # =====================
         # SECURITY
         # =====================
-        key_name = 'masterkey-frankfurt'
+        key_name = 'masterkey'
         outer_perimeter_security_group = ec2.SecurityGroup(self, "SecurityGroup",
                                                            vpc=vpc,
                                                            description="Allow ssh access to ec2 instances",
@@ -89,11 +79,12 @@ class InstanceStack(cdk.Stack):
 
         image = ubuntu_image
 
-        cdk.CfnOutput(self, 'MachineImageOutput',
+        if debug_mode:
+            CfnOutput(self, 'MachineImageOutput',
                       value=str(image.get_image(self).image_id),
                       description='MachineImageId',
                       )
-        cdk.CfnOutput(self, 'MachineImageUserDataOutput',
+            CfnOutput(self, 'MachineImageUserDataOutput',
                       value=str(image.get_image(self).user_data.render()),
                       description='MachineImage UserData',
                       )
@@ -111,22 +102,41 @@ class InstanceStack(cdk.Stack):
         init_ubuntu = ec2.CloudFormationInit.from_config_sets(
             config_sets={
                 # Applies the configs below in this order
+                "packaging": ['install_snap'],
                 "logging": ['install_cw_agent'],
-                "testing": ['proof-of-life'],
-                'connectivity': ['install_mosh'],
+                "testing": [],
+                'connectivity': ['install_mosh', 'install_vnc'],
             },
             configs={
+                'install_snap': ec2.InitConfig([
+                    ec2.InitPackage.apt(
+                        package_name='snap',
+                    ),
+                ]),
+                'install_vnc': ec2.InitConfig([
+                    # https://www.makeuseof.com/install-ubuntu-vnc-server-linux/
+                    # https://www.24x7serversupport.com/24x7serversupport-blog/install-vnc-server-on-ubuntu-18/
+
+                    ec2.InitPackage.apt(
+                        package_name='xfce4',
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='xfce4-goodies',
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='xorg',
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='dbus-x11',
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='x11-xserver-utils',
+                    ),
+                ]),
                 'install_mosh': ec2.InitConfig([
                     ec2.InitPackage.apt(
                         package_name='mosh',
                     ),
-                    # TODO Allow MOSH traffic
-                    #     https://linuxhandbook.com/mosh/
-                    #     https://mosh.org/#getting
-                ]),
-                'proof-of-life': ec2.InitConfig([
-                    ec2.InitFile.from_string("~/ifyouseethisitsworking",
-                                             "This got written during instance startup"),
                 ]),
                 'install_cw_agent': ec2.InitConfig([
 
@@ -156,7 +166,7 @@ class InstanceStack(cdk.Stack):
                                 user_data_causes_replacement=True,
                                 vpc=vpc,
                                 instance_type=ec2.InstanceType.of(
-                                    ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.SMALL),
+                                    ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.LARGE),
                                 machine_image=image,
                                 key_name=key_name,
                                 security_group=outer_perimeter_security_group,
@@ -165,7 +175,7 @@ class InstanceStack(cdk.Stack):
                                 # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_ec2/ApplyCloudFormationInitOptions.html
                                 init_options=ec2.ApplyCloudFormationInitOptions(
                                     # Optional, which configsets to activate (['default'] by default)
-                                    config_sets=["connectivity"],
+                                    config_sets=["packaging", "connectivity"],
 
                                     # Don’t fail the instance creation when cfn-init fails. You can use this to
                                     # prevent CloudFormation from rolling back when instances fail to start up,
@@ -173,7 +183,7 @@ class InstanceStack(cdk.Stack):
                                     ignore_failures=debug_mode,
 
                                     # Optional, how long the installation is expected to take (5 minutes by default)
-                                    timeout=Duration.minutes(5),
+                                    timeout=Duration.minutes(10),
 
                                     # Optional, whether to include the --url argument when running cfn-init and cfn-signal commands (false by default)
                                     include_url=False,
@@ -184,14 +194,37 @@ class InstanceStack(cdk.Stack):
                                 vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
                                 )
 
+        # TODO convert to Spot instances
+        #
+        # Launching EC2 Spot Instances via EC2 Auto Scaling group
+        # https://ec2spotworkshops.com/launching_ec2_spot_instances/asg.html
+
         # asg = autoscaling.AutoScalingGroup(self, "ASG",
         #                                    vpc=vpc,
         #                                    instance_type=ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE3,
-        #                                                                      ec2.InstanceSize.MICRO),
+        #                                                                      ec2.InstanceSize.LARGE),
         #                                    machine_image=image,
         #                                    security_group=outer_perimeter_security_group,
+        #                                    associate_public_ip_address=True,
+        #                                    allow_all_outbound=True,
         #                                    key_name=key_name,
         #                                    init=init,
+        #                                    # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_ec2/ApplyCloudFormationInitOptions.html
+        #                                    init_options=autoscaling.ApplyCloudFormationInitOptions(
+        #                                        # Optional, which configsets to activate (['default'] by default)
+        #                                        config_sets=["connectivity"],
+        #
+        #                                        # Don’t fail the instance creation when cfn-init fails. You can use this to
+        #                                        # prevent CloudFormation from rolling back when instances fail to start up,
+        #                                        # to help in debugging. Default: false
+        #                                        ignore_failures=debug_mode,
+        #
+        #                                        # Optional, whether to include the --url argument when running cfn-init and cfn-signal commands (false by default)
+        #                                        include_url=False,
+        #
+        #                                        # Optional, whether to include the --role argument when running cfn-init and cfn-signal commands (false by default)
+        #                                        include_role=False
+        #                                    ),
         #                                    signals=autoscaling.Signals.wait_for_all(
         #                                        timeout=cdk.Duration.minutes(2)
         #                                    ),
@@ -201,21 +234,21 @@ class InstanceStack(cdk.Stack):
         #                                    desired_capacity=1,
         #                                    min_capacity=0,
         #                                    max_capacity=5,
+        #                                    vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
         #                                    )
 
-        # cdk.CfnOutput(self, 'InstanceUserData',
-        #               value=asg.user_data.render(),
-        #               description='UserData for the instances.',
-        #               )
+        # TODO Scale out or in based on time.
+        # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_autoscaling/AutoScalingGroup.html#aws_cdk.aws_autoscaling.AutoScalingGroup.scale_on_schedule
+        # To have a warm pool ready for the day ahead
 
-        cdk.CfnOutput(self, 'InstancePublicDNSname',
-                      value=instance.instance_public_dns_name,
-                      description='Publicly-routable DNS name for this instance.',
-                      )
+        CfnOutput(self, 'InstancePublicDNSname',
+                  value=instance.instance_public_dns_name,
+                  description='Publicly-routable DNS name for this instance.',
+                  )
 
         user = 'ubuntu'
         ssh_command = 'ssh' + ' -i ' + key_name + '.pem ' + user + '@' + instance.instance_public_dns_name
-        cdk.CfnOutput(self, 'InstanceSSHcommand',
-                      value=ssh_command,
-                      description='Command to SSH into instance.',
-                      )
+        CfnOutput(self, 'InstanceSSHcommand',
+                  value=ssh_command,
+                  description='Command to SSH into instance.',
+                  )

@@ -1,5 +1,0 @@
-{
-  "dependencies": {
-    "aws-cdk": "^1.133.0"
-  }
-}
