@@ -105,33 +105,54 @@ class InstanceStack(Stack):
                 "packaging": ['install_snap'],
                 "logging": ['install_cw_agent'],
                 "testing": [],
+                "sysadmin": ['awscli'],
                 'connectivity': ['install_mosh', 'install_vnc'],
             },
             configs={
+                'awscli': ec2.InitConfig([
+                    # https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+                    ec2.InitFile.from_url(
+                        file_name='awscliv2.zip',
+                        url="https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip",
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='unzip',
+                    ),
+                    ec2.InitCommand.shell_command(
+                        "unzip awscliv2.zip",
+                    ),
+                    ec2.InitCommand.shell_command(
+                        "sudo ./aws/install",
+                    ),
+                ]),
                 'install_snap': ec2.InitConfig([
                     ec2.InitPackage.apt(
                         package_name='snap',
                     ),
                 ]),
                 'install_vnc': ec2.InitConfig([
-                    # https://www.makeuseof.com/install-ubuntu-vnc-server-linux/
-                    # https://www.24x7serversupport.com/24x7serversupport-blog/install-vnc-server-on-ubuntu-18/
+                    # https://en.wikipedia.org/wiki/X11vnc
+                    # https://askubuntu.com/questions/229989/how-to-setup-x11vnc-to-access-with-graphical-login-screen/
 
                     ec2.InitPackage.apt(
-                        package_name='xfce4',
+                        package_name='x11vnc',
                     ),
-                    ec2.InitPackage.apt(
-                        package_name='xfce4-goodies',
-                    ),
-                    ec2.InitPackage.apt(
-                        package_name='xorg',
-                    ),
-                    ec2.InitPackage.apt(
-                        package_name='dbus-x11',
-                    ),
-                    ec2.InitPackage.apt(
-                        package_name='x11-xserver-utils',
-                    ),
+
+                    # ec2.InitPackage.apt(
+                    #     package_name='xfce4',
+                    # ),
+                    # ec2.InitPackage.apt(
+                    #     package_name='xfce4-goodies',
+                    # ),
+                    # ec2.InitPackage.apt(
+                    #     package_name='xorg',
+                    # ),
+                    # ec2.InitPackage.apt(
+                    #     package_name='dbus-x11',
+                    # ),
+                    # ec2.InitPackage.apt(
+                    #     package_name='x11-xserver-utils',
+                    # ),
                 ]),
                 'install_mosh': ec2.InitConfig([
                     ec2.InitPackage.apt(
@@ -175,7 +196,7 @@ class InstanceStack(Stack):
                                 # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_ec2/ApplyCloudFormationInitOptions.html
                                 init_options=ec2.ApplyCloudFormationInitOptions(
                                     # Optional, which configsets to activate (['default'] by default)
-                                    config_sets=["packaging", "connectivity"],
+                                    config_sets=["packaging", "connectivity", 'sysadmin'],
 
                                     # Don’t fail the instance creation when cfn-init fails. You can use this to
                                     # prevent CloudFormation from rolling back when instances fail to start up,
