@@ -3,8 +3,9 @@ from aws_cdk import (
     Duration,
     Stack,
     aws_ec2 as ec2,
-    aws_logs as logs, CfnOutput,
+    aws_logs as logs, CfnOutput, RemovalPolicy,
 )
+from aws_cdk.aws_iam import Role, ServicePrincipal, ManagedPolicy
 from constructs import Construct
 
 
@@ -35,6 +36,12 @@ class InstanceStack(Stack):
                                                         "allow ssh access from the world")
         outer_perimeter_security_group.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.udp_range(60000, 61000),
                                                         "allow mosh access from the world")
+
+        role = Role(self, "MyInstanceRole",
+                    assumed_by=ServicePrincipal("ec2.amazonaws.com")
+                    )
+        role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AdministratorAccess"))
+        role.apply_removal_policy(RemovalPolicy.Destroy)
 
         # =====================
         # STORAGE
@@ -112,17 +119,19 @@ class InstanceStack(Stack):
                 'awscli': ec2.InitConfig([
                     # https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
                     ec2.InitFile.from_url(
-                        file_name='awscliv2.zip',
+                        file_name=working_dir + 'awscliv2.zip',
                         url="https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip",
                     ),
                     ec2.InitPackage.apt(
                         package_name='unzip',
                     ),
                     ec2.InitCommand.shell_command(
-                        "unzip awscliv2.zip",
+                        'unzip awscliv2.zip',
+                        cwd=working_dir,
                     ),
                     ec2.InitCommand.shell_command(
                         "sudo ./aws/install",
+                        cwd=working_dir,
                     ),
                 ]),
                 'install_snap': ec2.InitConfig([
@@ -191,6 +200,7 @@ class InstanceStack(Stack):
                                 machine_image=image,
                                 key_name=key_name,
                                 security_group=outer_perimeter_security_group,
+                                role=role,
                                 init=init,
 
                                 # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_ec2/ApplyCloudFormationInitOptions.html
@@ -228,6 +238,7 @@ class InstanceStack(Stack):
         #                                    security_group=outer_perimeter_security_group,
         #                                    associate_public_ip_address=True,
         #                                    allow_all_outbound=True,
+        #                                    role=role,
         #                                    key_name=key_name,
         #                                    init=init,
         #                                    # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_ec2/ApplyCloudFormationInitOptions.html
