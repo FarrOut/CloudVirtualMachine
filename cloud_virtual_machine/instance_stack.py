@@ -41,7 +41,7 @@ class InstanceStack(Stack):
                     assumed_by=ServicePrincipal("ec2.amazonaws.com")
                     )
         role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AdministratorAccess"))
-        role.apply_removal_policy(RemovalPolicy.Destroy)
+        role.apply_removal_policy(RemovalPolicy.DESTROY)
 
         # =====================
         # STORAGE
