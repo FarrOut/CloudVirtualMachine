@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-import os, socket
+import os
+import socket
 
 import aws_cdk as cdk
-
 # from cloud_virtual_machine.pipeline_stack import PipelineStack
 from aws_cdk import (
     aws_ec2 as ec2,
@@ -14,8 +14,10 @@ from cloud_virtual_machine.instance_stack import InstanceStack
 # from cloud_virtual_machine.logging_stack import LoggingStack
 
 
-def getMyIP() -> str:
+def get_my_ip() -> str:
     hostname = socket.gethostname()
+    print("Your Computer hostname is:" + hostname)
+
     ip = socket.gethostbyname(hostname)
     print("Your Computer IP Address is:" + ip)
 
@@ -33,7 +35,7 @@ euro_env = cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='eu-
 
 # PipelineStack(app, "PipelineStack", env=default_env)
 
-InstanceStack(app, "InstanceStack", env=default_env, whitelisted_peer=ec2.Peer.ipv6(getMyIP()+'/32'))
+InstanceStack(app, "InstanceStack", env=default_env, whitelisted_peer=ec2.Peer.ipv6(get_my_ip() + '/32'))
 # LoggingStack(app, "LoggingStack", env=euro_env)
 
 app.synth()

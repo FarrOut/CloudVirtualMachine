@@ -5,9 +5,7 @@ from aws_cdk import (
     aws_ec2 as ec2,
     aws_logs as logs, CfnOutput, RemovalPolicy,
 )
-from aws_cdk.aws_iam import Role, ServicePrincipal, ManagedPolicy
 from constructs import Construct
-import socket
 
 
 class InstanceStack(Stack):
@@ -33,9 +31,9 @@ class InstanceStack(Stack):
                                                            description="Allow ssh access to ec2 instances",
                                                            allow_all_outbound=True
                                                            )
-        outer_perimeter_security_group.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(22),
+        outer_perimeter_security_group.add_ingress_rule(whitelisted_peer, ec2.Port.tcp(22),
                                                         "allow ssh access from the world")
-        outer_perimeter_security_group.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.udp_range(60000, 61000),
+        outer_perimeter_security_group.add_ingress_rule(whitelisted_peer, ec2.Port.udp_range(60000, 61000),
                                                         "allow mosh access from the world")
 
         bastion = ec2.BastionHostLinux(self, "BastionHost",
