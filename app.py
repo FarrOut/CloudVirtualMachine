@@ -1,11 +1,29 @@
 #!/usr/bin/env python3
-import os
+import os, socket
 
 import aws_cdk as cdk
 
 # from cloud_virtual_machine.pipeline_stack import PipelineStack
+from aws_cdk import (
+    aws_ec2 as ec2,
+)
+
 from cloud_virtual_machine.instance_stack import InstanceStack
+
+
 # from cloud_virtual_machine.logging_stack import LoggingStack
+
+
+def getMyIP() -> str:
+    hostname = socket.gethostname()
+    ip = socket.gethostbyname(hostname)
+    print("Your Computer IP Address is:" + ip)
+
+    ipv6 = str(socket.getaddrinfo(hostname, None, socket.AF_INET6)[0][4][0])
+    print("Your Computer IPv6 Address is:" + ipv6)
+
+    return ipv6
+
 
 app = cdk.App()
 
@@ -14,7 +32,8 @@ rsa_env = cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='af-s
 euro_env = cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='eu-central-1')
 
 # PipelineStack(app, "PipelineStack", env=default_env)
-InstanceStack(app, "InstanceStack", env=default_env)
+
+InstanceStack(app, "InstanceStack", env=default_env, whitelisted_peer=ec2.Peer.ipv6(getMyIP()+'/32'))
 # LoggingStack(app, "LoggingStack", env=euro_env)
 
 app.synth()

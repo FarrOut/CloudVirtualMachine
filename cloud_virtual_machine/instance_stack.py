@@ -7,11 +7,12 @@ from aws_cdk import (
 )
 from aws_cdk.aws_iam import Role, ServicePrincipal, ManagedPolicy
 from constructs import Construct
+import socket
 
 
 class InstanceStack(Stack):
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, whitelisted_peer: ec2.Peer, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         debug_mode = True  # TODO debugging
@@ -37,11 +38,10 @@ class InstanceStack(Stack):
         outer_perimeter_security_group.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.udp_range(60000, 61000),
                                                         "allow mosh access from the world")
 
-        role = Role(self, "MyInstanceRole",
-                    assumed_by=ServicePrincipal("ec2.amazonaws.com")
-                    )
-        role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AdministratorAccess"))
-        role.apply_removal_policy(RemovalPolicy.DESTROY)
+        bastion = ec2.BastionHostLinux(self, "BastionHost",
+                                       vpc=vpc, )
+        bastion.allow_ssh_access_from(whitelisted_peer)
+        bastion.apply_removal_policy(RemovalPolicy.DESTROY)
 
         # =====================
         # STORAGE
@@ -200,7 +200,6 @@ class InstanceStack(Stack):
                                 machine_image=image,
                                 key_name=key_name,
                                 security_group=outer_perimeter_security_group,
-                                role=role,
                                 init=init,
 
                                 # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_ec2/ApplyCloudFormationInitOptions.html
