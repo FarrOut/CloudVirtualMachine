@@ -1,5 +1,6 @@
 notes.txt
-cloud_virtual_machine/**/*.pub
+*.pub
+*.pem
 
 .idea/
 

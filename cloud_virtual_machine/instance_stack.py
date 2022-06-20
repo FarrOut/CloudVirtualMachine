@@ -10,7 +10,8 @@ from constructs import Construct
 
 class InstanceStack(Stack):
 
-    def __init__(self, scope: Construct, construct_id: str, ssh_public_key_path: str, whitelisted_peer: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, ssh_public_key_path: str, whitelisted_peer: str,
+                 **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         debug_mode = True  # TODO debugging
@@ -20,8 +21,6 @@ class InstanceStack(Stack):
 
         # Securing your bastion hosts with Amazon EC2 Instance Connect
         # https://aws.amazon.com/blogs/infrastructure-and-automation/securing-your-bastion-hosts-with-amazon-ec2-instance-connect/
-
-
 
         # =====================
         # NETWORKING
@@ -286,20 +285,19 @@ class InstanceStack(Stack):
                   )
 
         os_user = 'ubuntu'
+        public_key_key, private_key_path = ssh_public_key_path
 
-        send_key_command  = f"aws ec2-instance-connect send-ssh-public-key --instance-id {bastion.instance_id} --instance-os-user {os_user} --ssh-public-key file:///{ssh_public_key_path}"
+        send_key_command = f"aws ec2-instance-connect send-ssh-public-key --instance-id {bastion.instance_id} --instance-os-user {os_user} --ssh-public-key file://{public_key_key}"
         CfnOutput(self, 'SendPublicSshKeyCommand',
                   value=send_key_command,
                   description='Command to send public SSH key to Bastion.',
                   )
 
-
-        # ssh_command = 'ssh' + ' -i ' + key_name + '.pem ' + user + '@' + bastion.instance_public_dns_name
-        # ssh_command = f"ssh -i {key_name}.pem {user}@{bastion.instance_public_dns_name}"
-        # CfnOutput(self, 'BastionSSHcommand',
-        #           value=ssh_command,
-        #           description='Command to SSH into Bastion.',
-        #           )
+        ssh_command = f"ssh -i {private_key_path} {os_user}@{bastion.instance_public_dns_name}"
+        CfnOutput(self, 'BastionSSHcommand',
+                  value=ssh_command,
+                  description='Command to SSH into Bastion.',
+                  )
 
         CfnOutput(self, 'InstancePublicDNSname',
                   value=instance.instance_public_dns_name,
