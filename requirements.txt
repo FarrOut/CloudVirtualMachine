@@ -1,3 +1,8 @@
-aws-cdk-lib~=2.2
 constructs>=10.0.0,<11.0.0
-socket
+
+pip~=22.0.4
+cryptography~=37.0.2
+setuptools~=60.0.3
+future~=0.18.2
+docutils~=0.15.2
+boto3~=1.19.0

@@ -10,10 +10,18 @@ from constructs import Construct
 
 class InstanceStack(Stack):
 
-    def __init__(self, scope: Construct, construct_id: str, whitelisted_peer: ec2.Peer, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, ssh_public_key_path: str, whitelisted_peer: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         debug_mode = True  # TODO debugging
+
+        # Set up EC2 Instance Connect
+        # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-set-up.html
+
+        # Securing your bastion hosts with Amazon EC2 Instance Connect
+        # https://aws.amazon.com/blogs/infrastructure-and-automation/securing-your-bastion-hosts-with-amazon-ec2-instance-connect/
+
+
 
         # =====================
         # NETWORKING
@@ -25,7 +33,6 @@ class InstanceStack(Stack):
         # =====================
         # SECURITY
         # =====================
-        key_name = 'masterkey'
         outer_perimeter_security_group = ec2.SecurityGroup(self, "SecurityGroup",
                                                            vpc=vpc,
                                                            description="Allow ssh access to ec2 instances",
@@ -37,9 +44,12 @@ class InstanceStack(Stack):
                                                         "allow mosh access from the world")
 
         bastion = ec2.BastionHostLinux(self, "BastionHost",
-                                       vpc=vpc, )
+                                       vpc=vpc,
+                                       subnet_selection=ec2.SubnetSelection(
+                                           subnet_type=ec2.SubnetType.PUBLIC
+                                       ), )
         bastion.allow_ssh_access_from(whitelisted_peer)
-        bastion.apply_removal_policy(RemovalPolicy.DESTROY)
+        # bastion.apply_removal_policy(RemovalPolicy.DESTROY)
 
         # =====================
         # STORAGE
@@ -196,7 +206,7 @@ class InstanceStack(Stack):
                                 instance_type=ec2.InstanceType.of(
                                     ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.LARGE),
                                 machine_image=image,
-                                key_name=key_name,
+                                # key_name=key_name,
                                 security_group=outer_perimeter_security_group,
                                 init=init,
 
@@ -270,14 +280,36 @@ class InstanceStack(Stack):
         # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_autoscaling/AutoScalingGroup.html#aws_cdk.aws_autoscaling.AutoScalingGroup.scale_on_schedule
         # To have a warm pool ready for the day ahead
 
+        CfnOutput(self, 'BastionPublicDNSname',
+                  value=bastion.instance_public_dns_name,
+                  description='Publicly-routable DNS name for this Bastion instance.',
+                  )
+
+        os_user = 'ubuntu'
+
+        send_key_command  = f"aws ec2-instance-connect send-ssh-public-key --instance-id {bastion.instance_id} --instance-os-user {os_user} --ssh-public-key file:///{ssh_public_key_path}"
+        CfnOutput(self, 'SendPublicSshKeyCommand',
+                  value=send_key_command,
+                  description='Command to send public SSH key to Bastion.',
+                  )
+
+
+        # ssh_command = 'ssh' + ' -i ' + key_name + '.pem ' + user + '@' + bastion.instance_public_dns_name
+        # ssh_command = f"ssh -i {key_name}.pem {user}@{bastion.instance_public_dns_name}"
+        # CfnOutput(self, 'BastionSSHcommand',
+        #           value=ssh_command,
+        #           description='Command to SSH into Bastion.',
+        #           )
+
         CfnOutput(self, 'InstancePublicDNSname',
                   value=instance.instance_public_dns_name,
                   description='Publicly-routable DNS name for this instance.',
                   )
 
         user = 'ubuntu'
-        ssh_command = 'ssh' + ' -i ' + key_name + '.pem ' + user + '@' + instance.instance_public_dns_name
-        CfnOutput(self, 'InstanceSSHcommand',
-                  value=ssh_command,
-                  description='Command to SSH into instance.',
-                  )
+        # ssh_command = 'ssh' + ' -i ' + key_name + '.pem ' + user + '@' + instance.instance_public_dns_name
+        # ssh_command = f"ssh -i {key_name}.pem {user}@{instance.instance_public_dns_name}"
+        # CfnOutput(self, 'InstanceSSHcommand',
+        #           value=ssh_command,
+        #           description='Command to SSH into instance.',
+        #           )

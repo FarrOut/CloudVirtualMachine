@@ -8,7 +8,8 @@ from aws_cdk import (
     aws_ec2 as ec2,
 )
 
-from cloud_virtual_machine.instance_stack import InstanceStack
+from instances import ssh_key_handler
+from instances.instance_stack import InstanceStack
 
 
 # from cloud_virtual_machine.logging_stack import LoggingStack
@@ -35,7 +36,8 @@ euro_env = cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='eu-
 
 # PipelineStack(app, "PipelineStack", env=default_env)
 
-InstanceStack(app, "InstanceStack", env=default_env, whitelisted_peer=ec2.Peer.ipv6(get_my_ip() + '/32'))
+InstanceStack(app, "InstanceStack", env=default_env, ssh_public_key_path=ssh_key_handler.generate_public_key(),
+              whitelisted_peer=ec2.Peer.ipv4('99.78.144.157/32'))
 # LoggingStack(app, "LoggingStack", env=euro_env)
 
 app.synth()
