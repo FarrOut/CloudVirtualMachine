@@ -5,16 +5,22 @@ from aws_cdk import (
     aws_ec2 as ec2,
     aws_logs as logs, CfnOutput, RemovalPolicy,
 )
-from aws_cdk.aws_iam import Role, ServicePrincipal, ManagedPolicy
 from constructs import Construct
 
 
 class InstanceStack(Stack):
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, ssh_public_key_path: str, whitelisted_peer: str,
+                 **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        debug_mode = True  # TODO debugging
+        debug_mode = False  # TODO debugging
+
+        # Set up EC2 Instance Connect
+        # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-set-up.html
+
+        # Securing your bastion hosts with Amazon EC2 Instance Connect
+        # https://aws.amazon.com/blogs/infrastructure-and-automation/securing-your-bastion-hosts-with-amazon-ec2-instance-connect/
 
         # =====================
         # NETWORKING
@@ -26,22 +32,23 @@ class InstanceStack(Stack):
         # =====================
         # SECURITY
         # =====================
-        key_name = 'masterkey'
         outer_perimeter_security_group = ec2.SecurityGroup(self, "SecurityGroup",
                                                            vpc=vpc,
                                                            description="Allow ssh access to ec2 instances",
                                                            allow_all_outbound=True
                                                            )
-        outer_perimeter_security_group.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(22),
+        outer_perimeter_security_group.add_ingress_rule(whitelisted_peer, ec2.Port.tcp(22),
                                                         "allow ssh access from the world")
-        outer_perimeter_security_group.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.udp_range(60000, 61000),
+        outer_perimeter_security_group.add_ingress_rule(whitelisted_peer, ec2.Port.udp_range(60000, 61000),
                                                         "allow mosh access from the world")
 
-        role = Role(self, "MyInstanceRole",
-                    assumed_by=ServicePrincipal("ec2.amazonaws.com")
-                    )
-        role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AdministratorAccess"))
-        role.apply_removal_policy(RemovalPolicy.DESTROY)
+        bastion = ec2.BastionHostLinux(self, "BastionHost",
+                                       vpc=vpc,
+                                       subnet_selection=ec2.SubnetSelection(
+                                           subnet_type=ec2.SubnetType.PUBLIC
+                                       ), )
+        bastion.allow_ssh_access_from(whitelisted_peer)
+        # bastion.apply_removal_policy(RemovalPolicy.DESTROY)
 
         # =====================
         # STORAGE
@@ -113,9 +120,15 @@ class InstanceStack(Stack):
                 "logging": ['install_cw_agent'],
                 "testing": [],
                 "sysadmin": ['awscli'],
-                'connectivity': ['install_mosh', 'install_vnc'],
+                'connectivity': ['install_mosh', 'install_vnc', 'instance_connect'],
             },
             configs={
+                'instance_connect': ec2.InitConfig([
+                    # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-set-up.html#ec2-instance-connect-install
+                    ec2.InitPackage.apt(
+                        package_name='ec2-instance-connect',
+                    ),
+                ]),
                 'awscli': ec2.InitConfig([
                     # https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
                     ec2.InitFile.from_url(
@@ -198,9 +211,8 @@ class InstanceStack(Stack):
                                 instance_type=ec2.InstanceType.of(
                                     ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.LARGE),
                                 machine_image=image,
-                                key_name=key_name,
+                                # key_name=key_name,
                                 security_group=outer_perimeter_security_group,
-                                role=role,
                                 init=init,
 
                                 # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_ec2/ApplyCloudFormationInitOptions.html
@@ -273,14 +285,39 @@ class InstanceStack(Stack):
         # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_autoscaling/AutoScalingGroup.html#aws_cdk.aws_autoscaling.AutoScalingGroup.scale_on_schedule
         # To have a warm pool ready for the day ahead
 
+        CfnOutput(self, 'BastionPublicDNSname',
+                  value=bastion.instance_public_dns_name,
+                  description='Publicly-routable DNS name for this Bastion instance.',
+                  )
+
+        instance_os_user = 'ubuntu'
+        bastion_user = 'ec2-user'
+        public_key_key, private_key_path = ssh_public_key_path
+
+        # TODO repeat send-ssh-public-key command for every AZ
+        az = vpc.availability_zones[0]
+
+        send_key_command = f"aws ec2-instance-connect send-ssh-public-key --instance-id {bastion.instance_id} --instance-os-user {bastion_user} --ssh-public-key file://{public_key_key} --availability-zone {az}"
+        CfnOutput(self, 'SendPublicSshKeyCommand',
+                  value=send_key_command,
+                  description='Command to send public SSH key to Bastion.',
+                  )
+
+        ssh_command = f"ssh -o \"IdentitiesOnly=yes\" -i {private_key_path} {bastion_user}@{bastion.instance_public_dns_name}"
+        CfnOutput(self, 'BastionSSHcommand',
+                  value=ssh_command,
+                  description='Command to SSH into Bastion.',
+                  )
+
         CfnOutput(self, 'InstancePublicDNSname',
                   value=instance.instance_public_dns_name,
                   description='Publicly-routable DNS name for this instance.',
                   )
 
         user = 'ubuntu'
-        ssh_command = 'ssh' + ' -i ' + key_name + '.pem ' + user + '@' + instance.instance_public_dns_name
-        CfnOutput(self, 'InstanceSSHcommand',
-                  value=ssh_command,
-                  description='Command to SSH into instance.',
-                  )
+        # ssh_command = 'ssh' + ' -i ' + key_name + '.pem ' + user + '@' + instance.instance_public_dns_name
+        # ssh_command = f"ssh -i {key_name}.pem {user}@{instance.instance_public_dns_name}"
+        # CfnOutput(self, 'InstanceSSHcommand',
+        #           value=ssh_command,
+        #           description='Command to SSH into instance.',
+        #           )
