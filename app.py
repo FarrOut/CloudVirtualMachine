@@ -37,7 +37,7 @@ euro_env = cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='eu-
 # PipelineStack(app, "PipelineStack", env=default_env)
 
 InstanceStack(app, "InstanceStack", env=default_env, ssh_public_key_path=ssh_key_handler.generate_key_pair(),
-              whitelisted_peer=ec2.Peer.ipv4('99.78.144.131/32'))
+              whitelisted_peer=ec2.Peer.ipv4('0.0.0.0/0'))
 # LoggingStack(app, "LoggingStack", env=euro_env)
 
 app.synth()

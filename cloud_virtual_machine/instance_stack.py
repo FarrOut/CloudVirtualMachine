@@ -14,7 +14,7 @@ class InstanceStack(Stack):
                  **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        debug_mode = True  # TODO debugging
+        debug_mode = False  # TODO debugging
 
         # Set up EC2 Instance Connect
         # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-set-up.html
@@ -120,9 +120,15 @@ class InstanceStack(Stack):
                 "logging": ['install_cw_agent'],
                 "testing": [],
                 "sysadmin": ['awscli'],
-                'connectivity': ['install_mosh', 'install_vnc'],
+                'connectivity': ['install_mosh', 'install_vnc', 'instance_connect'],
             },
             configs={
+                'instance_connect': ec2.InitConfig([
+                    # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-set-up.html#ec2-instance-connect-install
+                    ec2.InitPackage.apt(
+                        package_name='ec2-instance-connect',
+                    ),
+                ]),
                 'awscli': ec2.InitConfig([
                     # https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
                     ec2.InitFile.from_url(
@@ -284,16 +290,20 @@ class InstanceStack(Stack):
                   description='Publicly-routable DNS name for this Bastion instance.',
                   )
 
-        os_user = 'ubuntu'
+        instance_os_user = 'ubuntu'
+        bastion_user = 'ec2-user'
         public_key_key, private_key_path = ssh_public_key_path
 
-        send_key_command = f"aws ec2-instance-connect send-ssh-public-key --instance-id {bastion.instance_id} --instance-os-user {os_user} --ssh-public-key file://{public_key_key}"
+        # TODO repeat send-ssh-public-key command for every AZ
+        az = vpc.availability_zones[0]
+
+        send_key_command = f"aws ec2-instance-connect send-ssh-public-key --instance-id {bastion.instance_id} --instance-os-user {bastion_user} --ssh-public-key file://{public_key_key} --availability-zone {az}"
         CfnOutput(self, 'SendPublicSshKeyCommand',
                   value=send_key_command,
                   description='Command to send public SSH key to Bastion.',
                   )
 
-        ssh_command = f"ssh -i {private_key_path} {os_user}@{bastion.instance_public_dns_name}"
+        ssh_command = f"ssh -o \"IdentitiesOnly=yes\" -i {private_key_path} {bastion_user}@{bastion.instance_public_dns_name}"
         CfnOutput(self, 'BastionSSHcommand',
                   value=ssh_command,
                   description='Command to SSH into Bastion.',
