@@ -8,7 +8,7 @@ from aws_cdk import (
 from constructs import Construct
 
 
-class InstanceStack(Stack):
+class TerminalStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, ssh_public_key_path: str, whitelisted_peer: str,
                  **kwargs) -> None:

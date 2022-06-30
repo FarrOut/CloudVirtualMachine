@@ -8,11 +8,11 @@ from aws_cdk import (
     aws_ec2 as ec2,
 )
 
-
-
 # from cloud_virtual_machine.logging_stack import LoggingStack
 from cloud_virtual_machine.security import ssh_key_handler
-from cloud_virtual_machine.instance_stack import InstanceStack
+from cloud_virtual_machine.terminal_stack import TerminalStack
+from cloud_virtual_machine.mainframe_stack import MainframeStack
+
 
 # TODO automatically detect local IP address
 def get_my_ip() -> str:
@@ -33,10 +33,12 @@ app = cdk.App()
 default_env = cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region=os.getenv('CDK_DEFAULT_REGION'))
 rsa_env = cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='af-south-1')
 euro_env = cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='eu-central-1')
+the_env = rsa_env
 
 # PipelineStack(app, "PipelineStack", env=default_env)
 
-InstanceStack(app, "InstanceStack", env=default_env, ssh_public_key_path=ssh_key_handler.generate_key_pair(),
+MainframeStack(app, "MainframeStack", env=the_env)
+TerminalStack(app, "TerminalStack", env=the_env, ssh_public_key_path=ssh_key_handler.generate_key_pair(),
               whitelisted_peer=ec2.Peer.ipv4('0.0.0.0/0'))
 # LoggingStack(app, "LoggingStack", env=euro_env)
 
