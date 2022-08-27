@@ -1,20 +1,29 @@
+from typing import List
+
 from aws_cdk import (
 
     Duration,
     Stack,
     aws_ec2 as ec2,
-    aws_logs as logs, CfnOutput, RemovalPolicy,
+    aws_logs as logs, CfnOutput, RemovalPolicy, NestedStack,
 )
 from constructs import Construct
 
 
-class InstanceStack(Stack):
+class TerminalStack(Stack):
 
-    def __init__(self, scope: Construct, construct_id: str, ssh_public_key_path: str, whitelisted_peer: str,
+    def __init__(self, scope: Construct, construct_id: str, vpc: ec2.Vpc, ssh_public_key_path: str,
+                 whitelisted_peers: List[str],
                  **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         debug_mode = False  # TODO debugging
+
+        # =====================
+        # SECURITY
+        # =====================
+        perimeter = Perimeter(self, 'PerimeterStack', vpc, whitelisted_peers)
+        bastion = perimeter.bastion
 
         # Set up EC2 Instance Connect
         # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-set-up.html
@@ -22,33 +31,7 @@ class InstanceStack(Stack):
         # Securing your bastion hosts with Amazon EC2 Instance Connect
         # https://aws.amazon.com/blogs/infrastructure-and-automation/securing-your-bastion-hosts-with-amazon-ec2-instance-connect/
 
-        # =====================
-        # NETWORKING
-        # =====================
-        vpc = ec2.Vpc(self, "VPC",
-                      max_azs=1,
-                      )
 
-        # =====================
-        # SECURITY
-        # =====================
-        outer_perimeter_security_group = ec2.SecurityGroup(self, "SecurityGroup",
-                                                           vpc=vpc,
-                                                           description="Allow ssh access to ec2 instances",
-                                                           allow_all_outbound=True
-                                                           )
-        outer_perimeter_security_group.add_ingress_rule(whitelisted_peer, ec2.Port.tcp(22),
-                                                        "allow ssh access from the world")
-        outer_perimeter_security_group.add_ingress_rule(whitelisted_peer, ec2.Port.udp_range(60000, 61000),
-                                                        "allow mosh access from the world")
-
-        bastion = ec2.BastionHostLinux(self, "BastionHost",
-                                       vpc=vpc,
-                                       subnet_selection=ec2.SubnetSelection(
-                                           subnet_type=ec2.SubnetType.PUBLIC
-                                       ), )
-        bastion.allow_ssh_access_from(whitelisted_peer)
-        # bastion.apply_removal_policy(RemovalPolicy.DESTROY)
 
         # =====================
         # STORAGE
@@ -212,7 +195,7 @@ class InstanceStack(Stack):
                                     ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.LARGE),
                                 machine_image=image,
                                 # key_name=key_name,
-                                security_group=outer_perimeter_security_group,
+                                security_group=perimeter.security_group,
                                 init=init,
 
                                 # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_ec2/ApplyCloudFormationInitOptions.html
@@ -321,3 +304,28 @@ class InstanceStack(Stack):
         #           value=ssh_command,
         #           description='Command to SSH into instance.',
         #           )
+
+
+class Perimeter(NestedStack):
+    def __init__(self, scope, id, vpc: ec2.Vpc, whitelisted_peers: List[str], parameters=None, timeout=None,
+                 notifications=None):
+        super().__init__(scope, id, parameters=parameters, timeout=timeout)
+
+        self.bastion = ec2.BastionHostLinux(self, "BastionHost",
+                                            vpc=vpc,
+                                            subnet_selection=ec2.SubnetSelection(
+                                                subnet_type=ec2.SubnetType.PUBLIC
+                                            ), )
+
+        self.security_group = ec2.SecurityGroup(self, "SecurityGroup",
+                                                vpc=vpc,
+                                                description="Outer perimeter for Bastion host.",
+                                                allow_all_outbound=True
+                                                )
+
+        for peer in whitelisted_peers:
+            self.security_group.add_ingress_rule(peer, ec2.Port.tcp(22),
+                                                 "allow ssh access from the world")
+            self.security_group.add_ingress_rule(peer, ec2.Port.udp_range(60000, 61000),
+                                                 "allow mosh access from the world")
+            self.bastion.allow_ssh_access_from(peer)
