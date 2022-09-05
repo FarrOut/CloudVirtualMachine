@@ -1,61 +1,33 @@
-# Welcome to your CDK Python project!
-
-This is a blank project for Python development with CDK.
-
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
-
-This project is set up like a standard Python project.  The initialization
-process also creates a virtualenv within this project, stored under the `.venv`
-directory.  To create the virtualenv it assumes that there is a `python3`
-(or `python` for Windows) executable in your path with access to the `venv`
-package. If for any reason the automatic creation of the virtualenv fails,
-you can create the virtualenv manually.
-
-To manually create a virtualenv on MacOS and Linux:
-
-```
-$ python -m venv .venv
-```
-
-After the init process completes and the virtualenv is created, you can use the following
-step to activate your virtualenv.
-
-```
-$ source .venv/bin/activate
-```
-
-If you are a Windows platform, you would activate the virtualenv like this:
-
-```
-% .venv\Scripts\activate.bat
-```
-
-Once the virtualenv is activated, you can install the required dependencies.
-
-```
-$ pip install -r requirements.txt
-```
-
-At this point you can now synthesize the CloudFormation template for this code.
-
-```
-$ cdk synth
-```
-
-To add additional dependencies, for example other CDK libraries, just add
-them to your `setup.py` file and rerun the `pip install -r requirements.txt`
-command.
-
-## Useful commands
-
- * `cdk ls`          list all stacks in the app
- * `cdk synth`       emits the synthesized CloudFormation template
- * `cdk deploy`      deploy this stack to your default AWS account/region
- * `cdk diff`        compare deployed stack with current state
- * `cdk docs`        open CDK documentation
-
-Enjoy!
-=======
 # CloudVirtualMachine
 
-https://github.com/FarrOut/CloudVirtualMachine
+CloudVirtualMachine (CVM) serves to allow one to easily provision cheap, stateless working EC2 instances on the AWS
+cloud. Think of it as a [Terminal](https://fallout.fandom.com/wiki/Terminal).
+
+## How to use
+
+### Connect to Bastion host
+Your instance is isolated and fronted by
+a [Bastion](https://aws.amazon.com/blogs/security/controlling-network-access-to-ec2-instances-using-a-bastion-server/).
+Therefore, to connect to your instance you need to jump via your Bastion. This is how to do it.
+
+1. Send public SSH key to EC2.
+
+[EC2 Instance Connect](https://aws.amazon.com/blogs/infrastructure-and-automation/securing-your-bastion-hosts-with-amazon-ec2-instance-connect/)
+works by uploading a one-time SSH public key to the Bastion host, which will grant you access via your SSH client of
+choice. After deployment, a pre-formatted CLI command with by outputted for you to paste into your console. It looks something like this: 
+
+```
+aws ec2-instance-connect send-ssh-public-key --instance-id i-xxxxxxxxxxxx --instance-os-user ec2-user --ssh-public-key file://C:\Users\whoever\CloudVirtualMachine\temp_key.pub --availability-zone eu-west-1a
+```
+
+2. Connect via SSH
+
+Once your public SSH key has been sent to EC2, you can now connect using the SSH client of your choice. Similarly, a sample command is generated for you. For example: 
+
+```
+ssh -o "IdentitiesOnly=yes" -i C:\Users\whoever\CloudVirtualMachine\temp_key.pem ec2-user@ec2-34-000-000-19.eu-west-1.compute.amazonaws.com
+```
+
+### Jump to worker Instance
+
+From your Bastion host, you can now jump to your worker Instance.

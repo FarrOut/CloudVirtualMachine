@@ -1,4 +1,6 @@
 notes.txt
+*.pub
+*.pem
 
 .idea/
 
