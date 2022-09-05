@@ -9,7 +9,7 @@ from aws_cdk.aws_iam import Role, ServicePrincipal, ManagedPolicy
 from constructs import Construct
 
 
-class InstanceStack(Stack):
+class TerminalStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, whitelisted_peer: ec2.Peer, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
