@@ -19,7 +19,9 @@ rsa_env = Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='af-south
 euro_env = Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='eu-central-1')
 
 # PipelineStack(app, "PipelineStack", env=default_env)
-TerminalStack(app, "TerminalStack", whitelisted_peer=ec2.Peer.prefix_list(), env=default_env)
+
+peers = app.node.try_get_context("peers")
+TerminalStack(app, "TerminalStack", whitelisted_peer=ec2.Peer.prefix_list(peers), env=default_env)
 # LoggingStack(app, "LoggingStack", env=euro_env)
 
 app.synth()
