@@ -11,7 +11,7 @@ from constructs import Construct
 
 class InstanceStack(Stack):
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, whitelisted_peer: ec2.Peer, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         debug_mode = True  # TODO debugging
@@ -26,21 +26,23 @@ class InstanceStack(Stack):
         # =====================
         # SECURITY
         # =====================
-        key_name = 'masterkey'
+        key_name = 'mykey'
         outer_perimeter_security_group = ec2.SecurityGroup(self, "SecurityGroup",
                                                            vpc=vpc,
                                                            description="Allow ssh access to ec2 instances",
                                                            allow_all_outbound=True
                                                            )
-        outer_perimeter_security_group.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(22),
+
+        outer_perimeter_security_group.add_ingress_rule(whitelisted_peer, ec2.Port.tcp(22),
                                                         "allow ssh access from the world")
-        outer_perimeter_security_group.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.udp_range(60000, 61000),
+        outer_perimeter_security_group.add_ingress_rule(whitelisted_peer, ec2.Port.udp_range(60000, 61000),
                                                         "allow mosh access from the world")
 
         role = Role(self, "MyInstanceRole",
                     assumed_by=ServicePrincipal("ec2.amazonaws.com")
                     )
-        role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AdministratorAccess"))
+        # role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AdministratorAccess"))
+        role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AWSCloudFormationFullAccess"))
         role.apply_removal_policy(RemovalPolicy.DESTROY)
 
         # =====================
