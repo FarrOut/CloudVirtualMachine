@@ -114,7 +114,7 @@ class TerminalStack(Stack):
                 "packaging": ['install_snap'],
                 "logging": ['install_cw_agent'],
                 "testing": [],
-                "sysadmin": ['awscli'],
+                "sysadmin": ['awscli', "aws-sam-cli"],
                 'connectivity': ['install_mosh', 'install_vnc'],
             },
             configs={
@@ -133,6 +133,37 @@ class TerminalStack(Stack):
                     ),
                     ec2.InitCommand.shell_command(
                         "sudo ./aws/install",
+                        cwd=working_dir,
+                    ),
+                ]),
+                'aws-sam-cli': ec2.InitConfig([
+                    # Download installer package
+                    # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install-linux.html#serverless-sam-cli-install-linux-sam-cli
+                    ec2.InitFile.from_url(
+                        file_name=working_dir + 'aws-sam-cli-linux-x86_64.zip',
+                        url="https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip",
+                    ),
+
+                    # Install unzip
+                    ec2.InitPackage.apt(
+                        package_name='unzip',
+                    ),
+
+                    #  Extract
+                    ec2.InitCommand.shell_command(
+                        'unzip aws-sam-cli-linux-x86_64.zip -d sam-installation/',
+                        cwd=working_dir,
+                    ),
+
+                    #  Install
+                    ec2.InitCommand.shell_command(
+                        "sudo ./sam-installation/install",
+                        cwd=working_dir,
+                    ),
+
+                    #  Check version
+                    ec2.InitCommand.shell_command(
+                        "sam --version",
                         cwd=working_dir,
                     ),
                 ]),
