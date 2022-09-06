@@ -114,7 +114,7 @@ class TerminalStack(Stack):
                 "packaging": ['install_snap'],
                 "logging": ['install_cw_agent'],
                 "testing": [],
-                "sysadmin": ['awscli', "aws-sam-cli"],
+                "sysadmin": ['awscli', "aws-sam-cli", "cfn-cli"],
                 'connectivity': ['install_mosh', 'install_vnc'],
             },
             configs={
@@ -164,6 +164,24 @@ class TerminalStack(Stack):
                     #  Check version
                     ec2.InitCommand.shell_command(
                         "sam --version",
+                        cwd=working_dir,
+                    ),
+                ]),
+                'cfn-cli': ec2.InitConfig([
+
+                    #  Pin Markupsafe to version 2.0.1 to workaround bug
+                    # https://github.com/aws-cloudformation/cloudformation-cli/issues/864
+                    # https://github.com/aws-cloudformation/cloudformation-cli/issues/899
+                    ec2.InitCommand.shell_command(
+                        "pip install markupsafe==2.0.1",
+                        cwd=working_dir,
+                    ),
+
+                    #  Install
+                    # https://docs.aws.amazon.com/cloudformation-cli/latest/userguide/what-is-cloudformation-cli.html#resource-type-setup
+                    ec2.InitCommand.shell_command(
+                        "pip install cloudformation-cli cloudformation-cli-java-plugin cloudformation-cli-go-plugin "
+                        "cloudformation-cli-python-plugin cloudformation-cli-typescript-plugin",
                         cwd=working_dir,
                     ),
                 ]),
