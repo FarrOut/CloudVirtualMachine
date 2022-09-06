@@ -6,6 +6,7 @@ from aws_cdk import (
     aws_logs as logs, CfnOutput, RemovalPolicy,
 )
 from aws_cdk.aws_iam import Role, ServicePrincipal, ManagedPolicy
+from aws_cdk.aws_s3 import Bucket
 from constructs import Construct
 
 
@@ -44,6 +45,9 @@ class TerminalStack(Stack):
         # role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AdministratorAccess"))
         role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AWSCloudFormationFullAccess"))
         role.apply_removal_policy(RemovalPolicy.DESTROY)
+
+        workbucket = Bucket.from_bucket_name(self, "ImportedWorkbucket", bucket_name='gfarr-workbucket')
+        workbucket.grant_read(role)
 
         # =====================
         # STORAGE
@@ -168,12 +172,21 @@ class TerminalStack(Stack):
                     ),
                 ]),
                 'cfn-cli': ec2.InitConfig([
-
-                    #  Pin Markupsafe to version 2.0.1 to workaround bug
+                    # Pin dependencies' versions to workaround conflicts
+                    #
+                    # https://stackoverflow.com/a/73199422
                     # https://github.com/aws-cloudformation/cloudformation-cli/issues/864
                     # https://github.com/aws-cloudformation/cloudformation-cli/issues/899
                     ec2.InitCommand.shell_command(
-                        "pip install markupsafe==2.0.1",
+                        "pip install --upgrade requests urllib3",
+                        cwd=working_dir,
+                    ),
+                    ec2.InitCommand.shell_command(
+                        "pip install markupsafe==2.0.1 pyyaml==5.4.1",
+                        cwd=working_dir,
+                    ),
+                    ec2.InitCommand.shell_command(
+                        "pip install werkzeug==2.1.2 --no-deps",
                         cwd=working_dir,
                     ),
 
