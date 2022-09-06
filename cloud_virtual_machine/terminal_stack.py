@@ -124,50 +124,20 @@ class TerminalStack(Stack):
             },
             configs={
                 'docker': ec2.InitConfig([
-                    ec2.InitPackage.apt(
-                        package_name='ca-certificates',
-                    ),
-                    ec2.InitPackage.apt(
-                        package_name='curl',
-                    ),
-                    ec2.InitPackage.apt(
-                        package_name='gnupg',
-                    ),
-                    ec2.InitPackage.apt(
-                        package_name='lsb-release',
-                    ),
+
+                    # Install Docker using the repository
+                    # https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository
                     ec2.InitCommand.shell_command(
-                        'sudo mkdir -p /etc/apt/keyrings',
-                        cwd=working_dir,
-                    ),
-                    ec2.InitCommand.shell_command(
-                        'curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o '
-                        '/etc/apt/keyrings/docker.gpg',
-                        cwd=working_dir,
-                    ),
-                    ec2.InitCommand.shell_command(
+                        'apt update && apt install -y ca-certificates curl gnupg lsb-release && ' +
+                        'mkdir -p /etc/apt/keyrings && ' + 'curl -fsSL https://download.docker.com/linux/ubuntu/gpg | '
+                                                           'sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg && ' +
                         'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] '
                         'https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee '
-                        '/etc/apt/sources.list.d/docker.list > /dev/null',
-                        cwd=working_dir,
-                    ),
-                    ec2.InitCommand.shell_command(
-                        'apt update -y',
+                        '/etc/apt/sources.list.d/docker.list > /dev/null && ' + ' apt update && ' +
+                        'apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin',
                         cwd=working_dir,
                     ),
 
-                    ec2.InitPackage.apt(
-                        package_name='docker-ce',
-                    ),
-                    ec2.InitPackage.apt(
-                        package_name='docker-ce-cli',
-                    ),
-                    ec2.InitPackage.apt(
-                        package_name='containerd.io',
-                    ),
-                    ec2.InitPackage.apt(
-                        package_name='docker-compose-plugin',
-                    ),
                 ]),
 
                 'awscli': ec2.InitConfig([
