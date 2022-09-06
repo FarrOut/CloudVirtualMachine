@@ -93,10 +93,10 @@ class TerminalStack(Stack):
                       value=str(image.get_image(self).image_id),
                       description='MachineImageId',
                       )
-            CfnOutput(self, 'MachineImageUserDataOutput',
-                      value=str(image.get_image(self).user_data.render()),
-                      description='MachineImage UserData',
-                      )
+            # CfnOutput(self, 'MachineImageUserDataOutput',
+            #           value=str(image.get_image(self).user_data.render()),
+            #           description='MachineImage UserData',
+            #           )
 
         # View instance Logs in the Console
         # https: // docs.aws.amazon.com / systems - manager / latest / userguide / monitoring - cloudwatch - agent.html
