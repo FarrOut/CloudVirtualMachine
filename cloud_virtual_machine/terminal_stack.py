@@ -118,10 +118,58 @@ class TerminalStack(Stack):
                 "packaging": ['install_snap'],
                 "logging": ['install_cw_agent'],
                 "testing": [],
+                "devops": ['docker'],
                 "sysadmin": ['awscli', "aws-sam-cli", "cfn-cli"],
                 'connectivity': ['install_mosh', 'install_vnc'],
             },
             configs={
+                'docker': ec2.InitConfig([
+                    ec2.InitPackage.apt(
+                        package_name='ca-certificates',
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='curl',
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='gnupg',
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='lsb-release',
+                    ),
+                    ec2.InitCommand.shell_command(
+                        'sudo mkdir -p /etc/apt/keyrings',
+                        cwd=working_dir,
+                    ),
+                    ec2.InitCommand.shell_command(
+                        'curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o '
+                        '/etc/apt/keyrings/docker.gpg',
+                        cwd=working_dir,
+                    ),
+                    ec2.InitCommand.shell_command(
+                        'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] '
+                        'https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee '
+                        '/etc/apt/sources.list.d/docker.list > /dev/null',
+                        cwd=working_dir,
+                    ),
+                    ec2.InitCommand.shell_command(
+                        'apt update -y',
+                        cwd=working_dir,
+                    ),
+
+                    ec2.InitPackage.apt(
+                        package_name='docker-ce',
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='docker-ce-cli',
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='containerd.io',
+                    ),
+                    ec2.InitPackage.apt(
+                        package_name='docker-compose-plugin',
+                    ),
+                ]),
+
                 'awscli': ec2.InitConfig([
                     # https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
                     ec2.InitFile.from_url(
@@ -270,7 +318,7 @@ class TerminalStack(Stack):
                                 # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_ec2/ApplyCloudFormationInitOptions.html
                                 init_options=ec2.ApplyCloudFormationInitOptions(
                                     # Optional, which configsets to activate (['default'] by default)
-                                    config_sets=["packaging", "connectivity", 'sysadmin'],
+                                    config_sets=["packaging", "connectivity", 'sysadmin', 'devops'],
 
                                     # Don’t fail the instance creation when cfn-init fails. You can use this to
                                     # prevent CloudFormation from rolling back when instances fail to start up,
