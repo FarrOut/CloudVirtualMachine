@@ -15,13 +15,14 @@ from cloud_virtual_machine.terminal_stack import TerminalStack
 app = App()
 
 default_env = Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region=os.getenv('CDK_DEFAULT_REGION'))
-rsa_env = Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='af-south-1')
+africa_env = Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='af-south-1')
 euro_env = Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='eu-central-1')
 
 # PipelineStack(app, "PipelineStack", env=default_env)
 
 peers = app.node.try_get_context("peers")
-TerminalStack(app, "TerminalStack", whitelisted_peer=ec2.Peer.prefix_list(peers), env=default_env)
+key_name = app.node.try_get_context("key_name")
+TerminalStack(app, "TerminalStack", whitelisted_peer=ec2.Peer.prefix_list(peers), key_name=key_name,  env=default_env)
 # LoggingStack(app, "LoggingStack", env=euro_env)
 
 app.synth()

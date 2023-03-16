@@ -12,7 +12,7 @@ from constructs import Construct
 
 class TerminalStack(Stack):
 
-    def __init__(self, scope: Construct, construct_id: str, whitelisted_peer: ec2.Peer, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, whitelisted_peer: ec2.Peer, key_name: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         debug_mode = True  # TODO debugging
@@ -27,7 +27,6 @@ class TerminalStack(Stack):
         # =====================
         # SECURITY
         # =====================
-        key_name = 'mykey'
         outer_perimeter_security_group = ec2.SecurityGroup(self, "SecurityGroup",
                                                            vpc=vpc,
                                                            description="Allow ssh access to ec2 instances",
