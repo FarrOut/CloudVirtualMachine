@@ -12,31 +12,9 @@ from constructs import Construct
 
 class TerminalStack(Stack):
 
-    def __init__(self, scope: Construct, construct_id: str, whitelisted_peer: ec2.Peer, key_name: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, vpc: ec2.Vpc, security_group: ec2.SecurityGroup,
+                 key_name: str, debug_mode: bool, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
-
-        debug_mode = True  # TODO debugging
-
-        # =====================
-        # NETWORKING
-        # =====================
-        vpc = ec2.Vpc(self, "VPC",
-                      max_azs=1,
-                      )
-
-        # =====================
-        # SECURITY
-        # =====================
-        outer_perimeter_security_group = ec2.SecurityGroup(self, "SecurityGroup",
-                                                           vpc=vpc,
-                                                           description="Allow ssh access to ec2 instances",
-                                                           allow_all_outbound=True
-                                                           )
-
-        outer_perimeter_security_group.add_ingress_rule(whitelisted_peer, ec2.Port.tcp(22),
-                                                        "allow ssh access from the world")
-        outer_perimeter_security_group.add_ingress_rule(whitelisted_peer, ec2.Port.udp_range(60000, 61000),
-                                                        "allow mosh access from the world")
 
         role = Role(self, "MyInstanceRole",
                     assumed_by=ServicePrincipal("ec2.amazonaws.com")
@@ -280,7 +258,7 @@ class TerminalStack(Stack):
                                     ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.LARGE),
                                 machine_image=image,
                                 key_name=key_name,
-                                security_group=outer_perimeter_security_group,
+                                security_group=security_group,
                                 role=role,
                                 init=init,
 
@@ -360,7 +338,7 @@ class TerminalStack(Stack):
                   )
 
         user = 'ubuntu'
-        ssh_command = 'ssh' + ' -i ' + key_name + '.pem ' + user + '@' + instance.instance_public_dns_name
+        ssh_command = 'ssh' + ' -v' + ' -i ' + key_name + '.pem ' + user + '@' + instance.instance_public_dns_name
         CfnOutput(self, 'InstanceSSHcommand',
                   value=ssh_command,
                   description='Command to SSH into instance.',

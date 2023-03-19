@@ -6,22 +6,26 @@ from aws_cdk import (
 )
 from constructs import Construct
 
+from cloud_virtual_machine.networking_stack import NetworkingStack
+from cloud_virtual_machine.security_stack import SecurityStack
+
 
 class InfraStack(cdk.Stack):
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, whitelisted_peer: ec2.Peer, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         # =====================
         # NETWORKING
         # =====================
-        self.vpc = ec2.Vpc(self, "VPC",
-                           max_azs=1,
-                           )
+        self.net = NetworkingStack(self, "NetworkingStack", )
 
-        # Create a new SSM Parameter holding a StringList
-        self.whitelisted_peers_parameter = ssm.StringListParameter(self, "WhitelistedPeers",
-                                                                   description='IP address to be whitelisted and allowed to enter our perimeter.',
-                                                                   string_list_value=[]
-                                                                   )
-        self.whitelisted_peers_parameter.apply_removal_policy(cdk.RemovalPolicy.RETAIN)
+        cdk.CfnOutput(self, 'VpcId',
+                      description='Identifier for this VPC.',
+                      value=self.net.vpc.vpc_id,
+                      )
+
+        # =====================
+        # SECURITY
+        # =====================
+        self.sec = SecurityStack(self, "SecurityStack", vpc=self.net.vpc, whitelisted_peer=whitelisted_peer)

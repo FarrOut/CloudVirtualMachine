@@ -8,6 +8,7 @@ from aws_cdk import (
 )
 
 # from cloud_virtual_machine.pipeline_stack import PipelineStack
+from cloud_virtual_machine.infra_stack import InfraStack
 from cloud_virtual_machine.terminal_stack import TerminalStack
 
 # from cloud_virtual_machine.logging_stack import LoggingStack
@@ -22,7 +23,12 @@ euro_env = Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='eu-cent
 
 peers = app.node.try_get_context("peers")
 key_name = app.node.try_get_context("key_name")
-TerminalStack(app, "TerminalStack", whitelisted_peer=ec2.Peer.prefix_list(peers), key_name=key_name,  env=default_env)
+
+infra = InfraStack(app, "InfrastructureStack", whitelisted_peer=ec2.Peer.prefix_list(peers), env=default_env)
+TerminalStack(app, "TerminalStack", vpc=infra.net.vpc, key_name=key_name,
+              security_group=infra.sec.outer_perimeter_security_group,
+              debug_mode=True,
+              env=default_env)
 # LoggingStack(app, "LoggingStack", env=euro_env)
 
 app.synth()
