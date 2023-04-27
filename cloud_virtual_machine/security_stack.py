@@ -21,6 +21,8 @@ class SecurityStack(NestedStack):
                                                              "allow ssh access from the world")
         self.outer_perimeter_security_group.add_ingress_rule(whitelisted_peer, ec2.Port.udp_range(60000, 61000),
                                                              "allow mosh access from the world")
+        self.outer_perimeter_security_group.add_egress_rule(whitelisted_peer, ec2.Port.udp_range(60000, 60001),
+                                                            "allow mosh access out to the world")
 
         CfnOutput(self, 'OuterPerimeterSecurityGroup',
                   description='SecurityGroup acting as first-line of defence from the outside world.',

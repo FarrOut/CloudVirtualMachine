@@ -87,7 +87,8 @@ class TerminalStack(Stack):
         instance_log_group = logs.LogGroup.from_log_group_name(self, 'InstanceLogGroup',
                                                                log_group_name='InstanceLogGroup')
 
-        working_dir = '/home/ubuntu/cfn-init/'
+        working_dir = '/home/ubuntu/'
+        handle = ec2.InitServiceRestartHandle()
         # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
         init_ubuntu = ec2.CloudFormationInit.from_config_sets(
             config_sets={
@@ -95,7 +96,7 @@ class TerminalStack(Stack):
                 "packaging": ['install_snap'],
                 "logging": ['install_cw_agent'],
                 "testing": [],
-                "devops": ['docker'],
+                "devops": ['docker', 'install_ansible'],
                 "sysadmin": ['awscli', "aws-sam-cli", "cfn-cli"],
                 'connectivity': ['install_mosh', 'install_vnc'],
             },
@@ -202,31 +203,97 @@ class TerminalStack(Stack):
                     # https://en.wikipedia.org/wiki/X11vnc
                     # https://askubuntu.com/questions/229989/how-to-setup-x11vnc-to-access-with-graphical-login-screen/
 
-                    ec2.InitPackage.apt(
-                        package_name='x11vnc',
-                    ),
+                    # ec2.InitCommand.shell_command(
+                    #     shell_command="wget https://github.com/sdarwin/Ansible-VNC/archive/refs/heads/master.zip",
+                    #     cwd=working_dir),
+                    #
+                    # ec2.InitCommand.shell_command(
+                    #     shell_command="unzip master.zip",
+                    #     cwd=working_dir),
+                    # ec2.InitPackage.apt(
+                    #     package_name='ansible',
+                    # ),
+                    # ec2.InitFile.from_asset('{}/Ansible-VNC-master/defaults/main.yml'.format(working_dir),
+                    #                         './assets/ansible-vnc.yaml'
+                    #                         ),
+                    # ec2.InitCommand.shell_command(
+                    #     shell_command="ansible-playbook --inventory localhost ./default.yml",
+                    #     cwd=working_dir + "/Ansible-VNC-master"),
 
                     # ec2.InitPackage.apt(
-                    #     package_name='xfce4',
+                    #     package_name='ansible',
                     # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='xfce4-goodies',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='xorg',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='dbus-x11',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='x11-xserver-utils',
-                    # ),
+
+                    ec2.InitPackage.apt(
+                        package_name='ubuntu-gnome-desktop',
+                    ), ec2.InitPackage.apt(
+                        package_name='tigervnc-viewer',
+                    ), ec2.InitPackage.apt(
+                        package_name='tigervnc-xorg-extension',
+                    ), ec2.InitPackage.apt(
+                        package_name='tigervnc-standalone-server',
+                    ), ec2.InitPackage.apt(
+                        package_name='ubuntu-desktop',
+                    ), ec2.InitPackage.apt(
+                        package_name='gnome-panel',
+                    ), ec2.InitPackage.apt(
+                        package_name='gnome-settings-daemon',
+                    ), ec2.InitPackage.apt(
+                        package_name='metacity',
+                    ), ec2.InitPackage.apt(
+                        package_name='nautilus',
+                    ), ec2.InitPackage.apt(
+                        package_name='gnome-terminal',
+                    ), ec2.InitPackage.apt(
+                        package_name='xterm',
+                    ), ec2.InitPackage.apt(
+                        package_name='libtasn1-bin',
+                    ), ec2.InitPackage.apt(
+                        package_name='tigervnc-standalone-server',
+                    ), ec2.InitPackage.apt(
+                        package_name='tigervnc-common',
+                    ),
+                    ec2.InitService.enable("gdm",
+                                           service_restart_handle=handle
+                                           ),
+                    ec2.InitCommand.shell_command(
+                        shell_command="journalctl -u gdm.service >> gdm.log",
+                        cwd=working_dir),
+                    ec2.InitCommand.shell_command(
+                        shell_command="mkdir .vnc",
+                        cwd=working_dir),
+                    ec2.InitCommand.shell_command(
+                        shell_command="echo {} | vncpasswd -f > ./passwd".format("topsykrettz"),
+                        # TODO unhardcode password
+                        cwd=working_dir + "/.vnc/",
+                        service_restart_handles=[handle]),
+
+
+                    # TODO https://github.com/sdarwin/Ansible-VNC/blob/master/tasks/main.yml
+                    # ec2.InitCommand.shell_command(
+                    #     shell_command="chmod passwd {}".format("0700"),
+                    #     cwd=working_dir + ".vnc/"),
                 ]),
                 'install_mosh': ec2.InitConfig([
                     ec2.InitPackage.apt(
                         package_name='mosh',
                     ),
+                    ec2.InitCommand.shell_command(
+                        shell_command="sudo ufw allow 60000:61000/udp",
+                        cwd=working_dir),
                 ]),
+                'install_ansible': ec2.InitConfig([
+                    ec2.InitPackage.apt(
+                        package_name='ansible',
+                    ),
+                    # ec2.InitCommand.shell_command(
+                    #     shell_command="python3 -m pip install --user ansible",
+                    #     cwd=working_dir),
+                    ec2.InitCommand.shell_command(
+                        shell_command="ansible --version",
+                        cwd=working_dir)
+                ]),
+
                 'install_cw_agent': ec2.InitConfig([
 
                     # Manually create or edit the CloudWatch agent configuration file
@@ -273,7 +340,7 @@ class TerminalStack(Stack):
                                     ignore_failures=debug_mode,
 
                                     # Optional, how long the installation is expected to take (5 minutes by default)
-                                    timeout=Duration.minutes(10),
+                                    timeout=Duration.minutes(15),
 
                                     # Optional, whether to include the --url argument when running cfn-init and cfn-signal commands (false by default)
                                     include_url=False,
