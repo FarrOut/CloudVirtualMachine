@@ -1,0 +1,5 @@
+---
+- name: Provision AWS VPC
+  import_playbook: aws-vpc-playbook.yml
+# - name: Provision EC2 instances
+#   import_playbook: ec2-instance-playbook.yml
