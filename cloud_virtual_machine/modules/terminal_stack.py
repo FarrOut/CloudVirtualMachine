@@ -1,16 +1,16 @@
 from aws_cdk import (
 
     Duration,
-    Stack,
+    NestedStack,
     aws_ec2 as ec2,
     aws_logs as logs, CfnOutput, RemovalPolicy,
 )
-from aws_cdk.aws_iam import Role, ServicePrincipal, ManagedPolicy
+from aws_cdk.aws_iam import Role, ServicePrincipal, ManagedPolicy, PolicyStatement
 from aws_cdk.aws_s3 import Bucket
 from constructs import Construct
 
 
-class TerminalStack(Stack):
+class TerminalStack(NestedStack):
 
     def __init__(self, scope: Construct, construct_id: str, vpc: ec2.Vpc, security_group: ec2.SecurityGroup,
                  key_name: str, debug_mode: bool, **kwargs) -> None:
@@ -21,6 +21,10 @@ class TerminalStack(Stack):
                     )
         # role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AdministratorAccess"))
         role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AWSCloudFormationFullAccess"))
+        role.add_to_policy(PolicyStatement(
+            resources=["*"],
+            actions=["ssm:UpdateInstanceInformation"]
+        ))
         role.apply_removal_policy(RemovalPolicy.DESTROY)
 
         workbucket = Bucket.from_bucket_name(self, "ImportedWorkbucket", bucket_name='gfarr-workbucket')
@@ -50,9 +54,15 @@ class TerminalStack(Stack):
             'sudo apt-get -y install python3 python3-pip unzip',
 
             # Download Cloudformation Helper Scripts
+            'mkdir -p /opt/aws/bin/',
+
+            'pip3 install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz',
+            'ln -s /usr/local/init/ubuntu/cfn-hup /etc/init.d/cfn-hup',
+            'ln -s /usr/local/bin/cfn-signal /opt/aws/bin/'
+            'ln -s /usr/local/bin/cfn-init /opt/aws/bin/'
             # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html
-            'wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.zip',
-            'python3 -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-py3-latest.zip',
+            # 'wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.zip',
+            # 'python3 -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-py3-latest.zip',
         )
 
         # Look up the most recent image matching a set of AMI filters.
@@ -61,7 +71,7 @@ class TerminalStack(Stack):
         ubuntu_image = ec2.LookupMachineImage(
             # Canonical, Ubuntu, 20.04 LTS, amd64 focal image build on 2021-04-30
             # ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-20210430
-            name="ubuntu/images/*ubuntu-focal-20.04-*-20210430",
+            name="ubuntu/images/*ubuntu-*-22.04-*",
             owners=["099720109477"],
             filters={'architecture': ['x86_64']},
             user_data=ubuntu_bootstrapping,
@@ -98,7 +108,7 @@ class TerminalStack(Stack):
                 "testing": [],
                 "devops": ['docker', 'install_ansible'],
                 "sysadmin": ['awscli', "aws-sam-cli", "cfn-cli"],
-                'connectivity': ['install_mosh', 'install_vnc'],
+                'connectivity': ['install_mosh'],
             },
             configs={
                 'docker': ec2.InitConfig([
@@ -199,81 +209,6 @@ class TerminalStack(Stack):
                         package_name='snap',
                     ),
                 ]),
-                'install_vnc': ec2.InitConfig([
-                    # https://en.wikipedia.org/wiki/X11vnc
-                    # https://askubuntu.com/questions/229989/how-to-setup-x11vnc-to-access-with-graphical-login-screen/
-
-                    # ec2.InitCommand.shell_command(
-                    #     shell_command="wget https://github.com/sdarwin/Ansible-VNC/archive/refs/heads/master.zip",
-                    #     cwd=working_dir),
-                    #
-                    # ec2.InitCommand.shell_command(
-                    #     shell_command="unzip master.zip",
-                    #     cwd=working_dir),
-                    # ec2.InitPackage.apt(
-                    #     package_name='ansible',
-                    # ),
-                    # ec2.InitFile.from_asset('{}/Ansible-VNC-master/defaults/main.yml'.format(working_dir),
-                    #                         './assets/ansible-vnc.yaml'
-                    #                         ),
-                    # ec2.InitCommand.shell_command(
-                    #     shell_command="ansible-playbook --inventory localhost ./default.yml",
-                    #     cwd=working_dir + "/Ansible-VNC-master"),
-
-                    # ec2.InitPackage.apt(
-                    #     package_name='ansible',
-                    # ),
-
-                    ec2.InitPackage.apt(
-                        package_name='ubuntu-gnome-desktop',
-                    ), ec2.InitPackage.apt(
-                        package_name='tigervnc-viewer',
-                    ), ec2.InitPackage.apt(
-                        package_name='tigervnc-xorg-extension',
-                    ), ec2.InitPackage.apt(
-                        package_name='tigervnc-standalone-server',
-                    ), ec2.InitPackage.apt(
-                        package_name='ubuntu-desktop',
-                    ), ec2.InitPackage.apt(
-                        package_name='gnome-panel',
-                    ), ec2.InitPackage.apt(
-                        package_name='gnome-settings-daemon',
-                    ), ec2.InitPackage.apt(
-                        package_name='metacity',
-                    ), ec2.InitPackage.apt(
-                        package_name='nautilus',
-                    ), ec2.InitPackage.apt(
-                        package_name='gnome-terminal',
-                    ), ec2.InitPackage.apt(
-                        package_name='xterm',
-                    ), ec2.InitPackage.apt(
-                        package_name='libtasn1-bin',
-                    ), ec2.InitPackage.apt(
-                        package_name='tigervnc-standalone-server',
-                    ), ec2.InitPackage.apt(
-                        package_name='tigervnc-common',
-                    ),
-                    ec2.InitService.enable("gdm",
-                                           service_restart_handle=handle
-                                           ),
-                    ec2.InitCommand.shell_command(
-                        shell_command="journalctl -u gdm.service >> gdm.log",
-                        cwd=working_dir),
-                    ec2.InitCommand.shell_command(
-                        shell_command="mkdir .vnc",
-                        cwd=working_dir),
-                    ec2.InitCommand.shell_command(
-                        shell_command="echo {} | vncpasswd -f > ./passwd".format("topsykrettz"),
-                        # TODO unhardcode password
-                        cwd=working_dir + "/.vnc/",
-                        service_restart_handles=[handle]),
-
-
-                    # TODO https://github.com/sdarwin/Ansible-VNC/blob/master/tasks/main.yml
-                    # ec2.InitCommand.shell_command(
-                    #     shell_command="chmod passwd {}".format("0700"),
-                    #     cwd=working_dir + ".vnc/"),
-                ]),
                 'install_mosh': ec2.InitConfig([
                     ec2.InitPackage.apt(
                         package_name='mosh',
@@ -318,8 +253,7 @@ class TerminalStack(Stack):
         )
 
         init = init_ubuntu
-        instance = ec2.Instance(self, "Instance",
-                                user_data_causes_replacement=True,
+        instance = ec2.Instance(self, "Instance",                                
                                 vpc=vpc,
                                 instance_type=ec2.InstanceType.of(
                                     ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.LARGE),
@@ -328,6 +262,7 @@ class TerminalStack(Stack):
                                 security_group=security_group,
                                 role=role,
                                 init=init,
+                                user_data_causes_replacement=True,
 
                                 # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_ec2/ApplyCloudFormationInitOptions.html
                                 init_options=ec2.ApplyCloudFormationInitOptions(
@@ -339,8 +274,11 @@ class TerminalStack(Stack):
                                     # to help in debugging. Default: false
                                     ignore_failures=debug_mode,
 
+                                    # Force instance replacement by embedding a config fingerprint. If true (the default), a hash of the config will be embedded into the UserData, so that if the config changes, the UserData changes.
+                                    embed_fingerprint=True,
+
                                     # Optional, how long the installation is expected to take (5 minutes by default)
-                                    timeout=Duration.minutes(15),
+                                    timeout=Duration.minutes(5),
 
                                     # Optional, whether to include the --url argument when running cfn-init and cfn-signal commands (false by default)
                                     include_url=False,
