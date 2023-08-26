@@ -10,7 +10,8 @@ from constructs import Construct
 
 class NetworkingStack(NestedStack):
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, removal_policy: RemovalPolicy = RemovalPolicy.RETAIN,
+                 **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         # =====================
@@ -21,7 +22,7 @@ class NetworkingStack(NestedStack):
                            )
 
         log_group = logs.LogGroup(self, "VpcFlowLogGroup",
-                                  removal_policy=RemovalPolicy.DESTROY,
+                                  removal_policy=removal_policy,
                                   retention=RetentionDays.ONE_WEEK,
                                   )
 
@@ -29,10 +30,11 @@ class NetworkingStack(NestedStack):
                                       assumed_by=iam.ServicePrincipal("vpc-flow-logs.amazonaws.com")
                                       )
 
-        ec2.FlowLog(self, "FlowLog",
-                    resource_type=ec2.FlowLogResourceType.from_vpc(self.vpc),
-                    destination=ec2.FlowLogDestination.to_cloud_watch_logs(log_group, vpc_flow_logs_role),
-                    )
+        flow_log = ec2.FlowLog(self, "FlowLog",
+                               resource_type=ec2.FlowLogResourceType.from_vpc(self.vpc),
+                               destination=ec2.FlowLogDestination.to_cloud_watch_logs(log_group, vpc_flow_logs_role),
+                               )
+        flow_log.apply_removal_policy(removal_policy)
 
         CfnOutput(self, 'VpcFlowLogGroupName',
                   description='Name of LogGroup storing FlowLogs for this VPC.',

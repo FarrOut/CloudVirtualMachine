@@ -1,19 +1,20 @@
 from aws_cdk import (
 
     Duration,
-    Stack,
+    NestedStack,
     aws_ec2 as ec2,
     aws_logs as logs, CfnOutput, RemovalPolicy,
 )
 from aws_cdk.aws_iam import Role, ServicePrincipal, ManagedPolicy
 from aws_cdk.aws_s3 import Bucket
+from aws_cdk.aws_ec2 import InitFile
 from constructs import Construct
 
 
-class TerminalStack(Stack):
+class TerminalStack(NestedStack):
 
     def __init__(self, scope: Construct, construct_id: str, vpc: ec2.Vpc, security_group: ec2.SecurityGroup,
-                 key_name: str, debug_mode: bool, **kwargs) -> None:
+                 key_name: str, debug_mode: bool = False, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         role = Role(self, "MyInstanceRole",
@@ -98,7 +99,7 @@ class TerminalStack(Stack):
                 "testing": [],
                 "devops": ['docker', 'install_ansible'],
                 "sysadmin": ['awscli', "aws-sam-cli", "cfn-cli"],
-                'connectivity': ['install_mosh', 'install_vnc'],
+                'connectivity': ['install_mosh'],
             },
             configs={
                 'docker': ec2.InitConfig([
@@ -199,81 +200,6 @@ class TerminalStack(Stack):
                         package_name='snap',
                     ),
                 ]),
-                'install_vnc': ec2.InitConfig([
-                    # https://en.wikipedia.org/wiki/X11vnc
-                    # https://askubuntu.com/questions/229989/how-to-setup-x11vnc-to-access-with-graphical-login-screen/
-
-                    # ec2.InitCommand.shell_command(
-                    #     shell_command="wget https://github.com/sdarwin/Ansible-VNC/archive/refs/heads/master.zip",
-                    #     cwd=working_dir),
-                    #
-                    # ec2.InitCommand.shell_command(
-                    #     shell_command="unzip master.zip",
-                    #     cwd=working_dir),
-                    # ec2.InitPackage.apt(
-                    #     package_name='ansible',
-                    # ),
-                    # ec2.InitFile.from_asset('{}/Ansible-VNC-master/defaults/main.yml'.format(working_dir),
-                    #                         './assets/ansible-vnc.yaml'
-                    #                         ),
-                    # ec2.InitCommand.shell_command(
-                    #     shell_command="ansible-playbook --inventory localhost ./default.yml",
-                    #     cwd=working_dir + "/Ansible-VNC-master"),
-
-                    # ec2.InitPackage.apt(
-                    #     package_name='ansible',
-                    # ),
-
-                    ec2.InitPackage.apt(
-                        package_name='ubuntu-gnome-desktop',
-                    ), ec2.InitPackage.apt(
-                        package_name='tigervnc-viewer',
-                    ), ec2.InitPackage.apt(
-                        package_name='tigervnc-xorg-extension',
-                    ), ec2.InitPackage.apt(
-                        package_name='tigervnc-standalone-server',
-                    ), ec2.InitPackage.apt(
-                        package_name='ubuntu-desktop',
-                    ), ec2.InitPackage.apt(
-                        package_name='gnome-panel',
-                    ), ec2.InitPackage.apt(
-                        package_name='gnome-settings-daemon',
-                    ), ec2.InitPackage.apt(
-                        package_name='metacity',
-                    ), ec2.InitPackage.apt(
-                        package_name='nautilus',
-                    ), ec2.InitPackage.apt(
-                        package_name='gnome-terminal',
-                    ), ec2.InitPackage.apt(
-                        package_name='xterm',
-                    ), ec2.InitPackage.apt(
-                        package_name='libtasn1-bin',
-                    ), ec2.InitPackage.apt(
-                        package_name='tigervnc-standalone-server',
-                    ), ec2.InitPackage.apt(
-                        package_name='tigervnc-common',
-                    ),
-                    ec2.InitService.enable("gdm",
-                                           service_restart_handle=handle
-                                           ),
-                    ec2.InitCommand.shell_command(
-                        shell_command="journalctl -u gdm.service >> gdm.log",
-                        cwd=working_dir),
-                    ec2.InitCommand.shell_command(
-                        shell_command="mkdir .vnc",
-                        cwd=working_dir),
-                    ec2.InitCommand.shell_command(
-                        shell_command="echo {} | vncpasswd -f > ./passwd".format("topsykrettz"),
-                        # TODO unhardcode password
-                        cwd=working_dir + "/.vnc/",
-                        service_restart_handles=[handle]),
-
-
-                    # TODO https://github.com/sdarwin/Ansible-VNC/blob/master/tasks/main.yml
-                    # ec2.InitCommand.shell_command(
-                    #     shell_command="chmod passwd {}".format("0700"),
-                    #     cwd=working_dir + ".vnc/"),
-                ]),
                 'install_mosh': ec2.InitConfig([
                     ec2.InitPackage.apt(
                         package_name='mosh',
@@ -283,15 +209,24 @@ class TerminalStack(Stack):
                         cwd=working_dir),
                 ]),
                 'install_ansible': ec2.InitConfig([
+                    # Create a group and user
+                    ec2.InitGroup.from_name("ansibles"),
+                    ec2.InitUser.from_name("ansible"),
                     ec2.InitPackage.apt(
                         package_name='ansible',
                     ),
-                    # ec2.InitCommand.shell_command(
-                    #     shell_command="python3 -m pip install --user ansible",
-                    #     cwd=working_dir),
                     ec2.InitCommand.shell_command(
                         shell_command="ansible --version",
-                        cwd=working_dir)
+                        cwd=working_dir),
+                    InitFile.from_asset(
+                        '/etc/ansible/hosts',
+                        'assets/ansible/inventory',
+                        group='ansibles',
+                        owner='ansible',
+                        service_restart_handles=[handle],
+                        deploy_time=False,
+
+                    )
                 ]),
 
                 'install_cw_agent': ec2.InitConfig([
