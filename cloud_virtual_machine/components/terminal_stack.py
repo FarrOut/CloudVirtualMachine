@@ -5,7 +5,7 @@ from aws_cdk import (
     aws_ec2 as ec2,
     aws_logs as logs, CfnOutput, RemovalPolicy,
 )
-from aws_cdk.aws_iam import Role, ServicePrincipal, ManagedPolicy
+from aws_cdk.aws_iam import Role, ServicePrincipal, ManagedPolicy, PolicyStatement
 from aws_cdk.aws_s3 import Bucket
 from aws_cdk.aws_ec2 import InitFile
 from constructs import Construct
@@ -22,6 +22,10 @@ class TerminalStack(NestedStack):
                     )
         # role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AdministratorAccess"))
         role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AWSCloudFormationFullAccess"))
+        role.add_to_policy(PolicyStatement(
+            resources=["*"],
+            actions=["ssm:UpdateInstanceInformation"]
+        ))
         role.apply_removal_policy(RemovalPolicy.DESTROY)
 
         workbucket = Bucket.from_bucket_name(self, "ImportedWorkbucket", bucket_name='gfarr-workbucket')
@@ -51,9 +55,15 @@ class TerminalStack(NestedStack):
             'sudo apt-get -y install python3 python3-pip unzip',
 
             # Download Cloudformation Helper Scripts
+            'mkdir -p /opt/aws/bin/',
+
+            'pip3 install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz',
+            'ln -s /usr/local/init/ubuntu/cfn-hup /etc/init.d/cfn-hup',
+            'ln -s /usr/local/bin/cfn-signal /opt/aws/bin/'
+            'ln -s /usr/local/bin/cfn-init /opt/aws/bin/'
             # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html
-            'wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.zip',
-            'python3 -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-py3-latest.zip',
+            # 'wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.zip',
+            # 'python3 -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-py3-latest.zip',
         )
 
         # Look up the most recent image matching a set of AMI filters.
@@ -62,7 +72,7 @@ class TerminalStack(NestedStack):
         ubuntu_image = ec2.LookupMachineImage(
             # Canonical, Ubuntu, 20.04 LTS, amd64 focal image build on 2021-04-30
             # ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-20210430
-            name="ubuntu/images/*ubuntu-focal-20.04-*-20210430",
+            name="ubuntu/images/*ubuntu-*-22.04-*",
             owners=["099720109477"],
             filters={'architecture': ['x86_64']},
             user_data=ubuntu_bootstrapping,
@@ -253,8 +263,7 @@ class TerminalStack(NestedStack):
         )
 
         init = init_ubuntu
-        instance = ec2.Instance(self, "Instance",
-                                user_data_causes_replacement=True,
+        instance = ec2.Instance(self, "Instance",                                
                                 vpc=vpc,
                                 instance_type=ec2.InstanceType.of(
                                     ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.LARGE),
@@ -263,6 +272,7 @@ class TerminalStack(NestedStack):
                                 security_group=security_group,
                                 role=role,
                                 init=init,
+                                user_data_causes_replacement=True,
 
                                 # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_ec2/ApplyCloudFormationInitOptions.html
                                 init_options=ec2.ApplyCloudFormationInitOptions(
@@ -274,8 +284,11 @@ class TerminalStack(NestedStack):
                                     # to help in debugging. Default: false
                                     ignore_failures=debug_mode,
 
+                                    # Force instance replacement by embedding a config fingerprint. If true (the default), a hash of the config will be embedded into the UserData, so that if the config changes, the UserData changes.
+                                    embed_fingerprint=True,
+
                                     # Optional, how long the installation is expected to take (5 minutes by default)
-                                    timeout=Duration.minutes(15),
+                                    timeout=Duration.minutes(5),
 
                                     # Optional, whether to include the --url argument when running cfn-init and cfn-signal commands (false by default)
                                     include_url=False,
