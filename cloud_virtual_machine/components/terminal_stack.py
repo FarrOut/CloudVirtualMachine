@@ -222,9 +222,9 @@ class TerminalStack(NestedStack):
                     # Create a group and user
                     ec2.InitGroup.from_name("ansibles"),
                     ec2.InitUser.from_name("ansible"),
-                    ec2.InitPackage.apt(
-                        package_name='ansible',
-                    ),
+                    ec2.InitCommand.shell_command(
+                        shell_command="pip3 install ansible",
+                        cwd=working_dir),
                     ec2.InitCommand.shell_command(
                         shell_command="ansible --version",
                         cwd=working_dir),
@@ -382,4 +382,5 @@ class TerminalStack(NestedStack):
                   )
 
         self.mosh_command = f"mosh --ssh=\"ssh -i {key_name}.pem\" {user}@{self.instance_public_name}"
-        self.mobaxterm_mosh_command = f"mobaxterm -newtab \"mosh --ssh=\"ssh -i {key_name}.pem\" {user}@{self.instance_public_name}"
+        self.mobaxterm_mosh_command = \
+            f"mobaxterm -newtab \"mosh --ssh=\\\"ssh -i {key_name}.pem\\\"\" {user}@{self.instance_public_name}"
