@@ -233,10 +233,32 @@ class TerminalStack(NestedStack):
                         'assets/ansible/inventory',
                         group='ansibles',
                         owner='ansible',
-                        service_restart_handles=[handle],
                         deploy_time=False,
-
-                    )
+                    ),
+                    InitFile.from_asset(
+                        '/home/ubuntu/ansible/vnc-playbook.yml',
+                        'assets/ansible/vnc-playbook.yml',
+                        group='ansibles',
+                        owner='ansible',
+                        deploy_time=False,
+                    ),
+                    InitFile.from_asset(
+                        '/home/ubuntu/ansible/roles/vnc/tasks/default.yml',
+                        'assets/ansible/roles/vnc/tasks/default.yml',
+                        group='ansibles',
+                        owner='ansible',
+                        deploy_time=False,
+                    ),
+                    InitFile.from_asset(
+                        '/home/ubuntu/ansible/default.yml',
+                        'assets/ansible/default.yml',
+                        group='ansibles',
+                        owner='ansible',
+                        deploy_time=False,
+                    ),
+                    ec2.InitCommand.shell_command(
+                        shell_command="ansible-playbook default.yml",
+                        cwd='/home/ubuntu/ansible/'),
                 ]),
 
                 'install_cw_agent': ec2.InitConfig([
@@ -263,7 +285,7 @@ class TerminalStack(NestedStack):
         )
 
         init = init_ubuntu
-        instance = ec2.Instance(self, "Instance",                                
+        instance = ec2.Instance(self, "Instance",
                                 vpc=vpc,
                                 instance_type=ec2.InstanceType.of(
                                     ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.LARGE),
@@ -346,15 +368,18 @@ class TerminalStack(NestedStack):
         # TODO Scale out or in based on time.
         # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_autoscaling/AutoScalingGroup.html#aws_cdk.aws_autoscaling.AutoScalingGroup.scale_on_schedule
         # To have a warm pool ready for the day ahead
-
+        self.instance_public_name = instance.instance_public_dns_name
         CfnOutput(self, 'InstancePublicDNSname',
-                  value=instance.instance_public_dns_name,
+                  value=self.instance_public_name,
                   description='Publicly-routable DNS name for this instance.',
                   )
 
         user = 'ubuntu'
-        ssh_command = 'ssh' + ' -v' + ' -i ' + key_name + '.pem ' + user + '@' + instance.instance_public_dns_name
+        self.ssh_command = 'ssh' + ' -v' + ' -i ' + key_name + '.pem ' + user + '@' + self.instance_public_name
         CfnOutput(self, 'InstanceSSHcommand',
-                  value=ssh_command,
+                  value=self.ssh_command,
                   description='Command to SSH into instance.',
                   )
+
+        self.mosh_command = f"mosh --ssh=\"ssh -i {key_name}.pem\" {user}@{self.instance_public_name}"
+        self.mobaxterm_mosh_command = f"mobaxterm -newtab \"mosh --ssh=\"ssh -i {key_name}.pem\" {user}@{self.instance_public_name}"

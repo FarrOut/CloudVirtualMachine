@@ -1,2 +1,2 @@
 ---
-- import_playbook: system-upgrade-playbook.yml
+- import_playbook: vnc-playbook.yml
