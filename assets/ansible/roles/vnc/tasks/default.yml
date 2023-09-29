@@ -1,0 +1,17 @@
+---
+
+- name: Download Tor Browser package
+  get_url:
+    url: https://www.torproject.org/dist/torbrowser/10.0.2/tor-browser-linux64-10.0.2_en-US.tar.xz
+    dest: /home/ubuntu/Downloads/tor-browser-linux64-10.0.2_en-US.tar.xz
+    mode: '500'
+    checksum: sha512:01399c058fdb6d0d18bfe4e21ac9890d7d7a7d6ad8db1beed4087b7730a9c0aaebad870f3442e86e27b65f5073406ad49894a7eb7f355041411d83274a853220
+    owner: vagrant
+
+- name: Extract Tor Browser package
+  unarchive:
+    src: /home/vagrant/Downloads/tor-browser-linux64-10.0.2_en-US.tar.xz
+    dest: /home/ubuntu/Desktop
+    remote_src: yes
+    owner: vagrant
+    mode: '700'

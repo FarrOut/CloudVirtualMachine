@@ -4,22 +4,24 @@ import os
 from aws_cdk import (
 
     aws_ec2 as ec2,
-    Environment, App
+    Environment, App, RemovalPolicy
 )
 
-# from cloud_virtual_machine.pipeline_stack import PipelineStack
-from cloud_virtual_machine.terminal_stack import TerminalStack
-
-# from cloud_virtual_machine.logging_stack import LoggingStack
+from cloud_virtual_machine.cloud_terminal_stack import CloudTerminal
 
 app = App()
 
 default_env = Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region=os.getenv('CDK_DEFAULT_REGION'))
-rsa_env = Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='af-south-1')
+africa_env = Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='af-south-1')
 euro_env = Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region='eu-central-1')
 
-# PipelineStack(app, "PipelineStack", env=default_env)
-TerminalStack(app, "TerminalStack", whitelisted_peer=ec2.Peer.prefix_list(), env=default_env)
-# LoggingStack(app, "LoggingStack", env=euro_env)
+peers = app.node.try_get_context("peers")
+key_name = app.node.try_get_context("key_name")
+
+CloudTerminal(app, "CloudTerminal", key_name=key_name,
+              debug_mode=True,
+              whitelisted_peer=ec2.Peer.prefix_list(peers),
+              removal_policy=RemovalPolicy.DESTROY,
+              env=default_env)
 
 app.synth()

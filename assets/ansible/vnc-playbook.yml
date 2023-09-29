@@ -1,0 +1,13 @@
+---
+- hosts: localhost
+  gather_facts: no
+  tasks:
+    - debug:
+        msg: "{{ 1 | pow(2) }}"
+
+- name: Download Tor
+  hosts: terminals
+  become:         yes
+  become_method:  sudo
+  roles:
+   - vnc

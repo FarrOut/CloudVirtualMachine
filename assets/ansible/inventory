@@ -1,0 +1,4 @@
+localhost ansible_connection=local
+
+[terminals]
+localhost ansible_connection=local

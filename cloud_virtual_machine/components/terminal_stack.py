@@ -1,49 +1,35 @@
 from aws_cdk import (
 
     Duration,
-    Stack,
+    NestedStack,
     aws_ec2 as ec2,
     aws_logs as logs, CfnOutput, RemovalPolicy,
 )
-from aws_cdk.aws_iam import Role, ServicePrincipal, ManagedPolicy
+from aws_cdk.aws_iam import Role, ServicePrincipal, ManagedPolicy, PolicyStatement
+from aws_cdk.aws_s3 import Bucket
+from aws_cdk.aws_ec2 import InitFile
 from constructs import Construct
 
 
-class TerminalStack(Stack):
+class TerminalStack(NestedStack):
 
-    def __init__(self, scope: Construct, construct_id: str, whitelisted_peer: ec2.Peer, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, vpc: ec2.Vpc, security_group: ec2.SecurityGroup,
+                 key_name: str, debug_mode: bool = False, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
-
-        debug_mode = True  # TODO debugging
-
-        # =====================
-        # NETWORKING
-        # =====================
-        vpc = ec2.Vpc(self, "VPC",
-                      max_azs=1,
-                      )
-
-        # =====================
-        # SECURITY
-        # =====================
-        key_name = 'mykey'
-        outer_perimeter_security_group = ec2.SecurityGroup(self, "SecurityGroup",
-                                                           vpc=vpc,
-                                                           description="Allow ssh access to ec2 instances",
-                                                           allow_all_outbound=True
-                                                           )
-
-        outer_perimeter_security_group.add_ingress_rule(whitelisted_peer, ec2.Port.tcp(22),
-                                                        "allow ssh access from the world")
-        outer_perimeter_security_group.add_ingress_rule(whitelisted_peer, ec2.Port.udp_range(60000, 61000),
-                                                        "allow mosh access from the world")
 
         role = Role(self, "MyInstanceRole",
                     assumed_by=ServicePrincipal("ec2.amazonaws.com")
                     )
         # role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AdministratorAccess"))
         role.add_managed_policy(ManagedPolicy.from_aws_managed_policy_name("AWSCloudFormationFullAccess"))
+        role.add_to_policy(PolicyStatement(
+            resources=["*"],
+            actions=["ssm:UpdateInstanceInformation"]
+        ))
         role.apply_removal_policy(RemovalPolicy.DESTROY)
+
+        workbucket = Bucket.from_bucket_name(self, "ImportedWorkbucket", bucket_name='gfarr-workbucket')
+        workbucket.grant_read(role)
 
         # =====================
         # STORAGE
@@ -69,9 +55,15 @@ class TerminalStack(Stack):
             'sudo apt-get -y install python3 python3-pip unzip',
 
             # Download Cloudformation Helper Scripts
+            'mkdir -p /opt/aws/bin/',
+
+            'pip3 install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz',
+            'ln -s /usr/local/init/ubuntu/cfn-hup /etc/init.d/cfn-hup',
+            'ln -s /usr/local/bin/cfn-signal /opt/aws/bin/'
+            'ln -s /usr/local/bin/cfn-init /opt/aws/bin/'
             # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html
-            'wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.zip',
-            'python3 -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-py3-latest.zip',
+            # 'wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.zip',
+            # 'python3 -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-py3-latest.zip',
         )
 
         # Look up the most recent image matching a set of AMI filters.
@@ -80,7 +72,7 @@ class TerminalStack(Stack):
         ubuntu_image = ec2.LookupMachineImage(
             # Canonical, Ubuntu, 20.04 LTS, amd64 focal image build on 2021-04-30
             # ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-20210430
-            name="ubuntu/images/*ubuntu-focal-20.04-*-20210430",
+            name="ubuntu/images/*ubuntu-*-22.04-*",
             owners=["099720109477"],
             filters={'architecture': ['x86_64']},
             user_data=ubuntu_bootstrapping,
@@ -93,10 +85,10 @@ class TerminalStack(Stack):
                       value=str(image.get_image(self).image_id),
                       description='MachineImageId',
                       )
-            CfnOutput(self, 'MachineImageUserDataOutput',
-                      value=str(image.get_image(self).user_data.render()),
-                      description='MachineImage UserData',
-                      )
+            # CfnOutput(self, 'MachineImageUserDataOutput',
+            #           value=str(image.get_image(self).user_data.render()),
+            #           description='MachineImage UserData',
+            #           )
 
         # View instance Logs in the Console
         # https: // docs.aws.amazon.com / systems - manager / latest / userguide / monitoring - cloudwatch - agent.html
@@ -106,7 +98,8 @@ class TerminalStack(Stack):
         instance_log_group = logs.LogGroup.from_log_group_name(self, 'InstanceLogGroup',
                                                                log_group_name='InstanceLogGroup')
 
-        working_dir = '/home/ubuntu/cfn-init/'
+        working_dir = '/home/ubuntu/'
+        handle = ec2.InitServiceRestartHandle()
         # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
         init_ubuntu = ec2.CloudFormationInit.from_config_sets(
             config_sets={
@@ -114,10 +107,28 @@ class TerminalStack(Stack):
                 "packaging": ['install_snap'],
                 "logging": ['install_cw_agent'],
                 "testing": [],
-                "sysadmin": ['awscli'],
-                'connectivity': ['install_mosh', 'install_vnc'],
+                "devops": ['docker', 'install_ansible'],
+                "sysadmin": ['awscli', "aws-sam-cli", "cfn-cli"],
+                'connectivity': ['install_mosh'],
             },
             configs={
+                'docker': ec2.InitConfig([
+
+                    # Install Docker using the repository
+                    # https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository
+                    ec2.InitCommand.shell_command(
+                        'apt update && apt install -y ca-certificates curl gnupg lsb-release && ' +
+                        'mkdir -p /etc/apt/keyrings && ' + 'curl -fsSL https://download.docker.com/linux/ubuntu/gpg | '
+                                                           'sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg && ' +
+                        'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] '
+                        'https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee '
+                        '/etc/apt/sources.list.d/docker.list > /dev/null && ' + ' apt update && ' +
+                        'apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin',
+                        cwd=working_dir,
+                    ),
+
+                ]),
+
                 'awscli': ec2.InitConfig([
                     # https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
                     ec2.InitFile.from_url(
@@ -136,40 +147,120 @@ class TerminalStack(Stack):
                         cwd=working_dir,
                     ),
                 ]),
+                'aws-sam-cli': ec2.InitConfig([
+                    # Download installer package
+                    # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install-linux.html#serverless-sam-cli-install-linux-sam-cli
+                    ec2.InitFile.from_url(
+                        file_name=working_dir + 'aws-sam-cli-linux-x86_64.zip',
+                        url="https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip",
+                    ),
+
+                    # Install unzip
+                    ec2.InitPackage.apt(
+                        package_name='unzip',
+                    ),
+
+                    #  Extract
+                    ec2.InitCommand.shell_command(
+                        'unzip aws-sam-cli-linux-x86_64.zip -d sam-installation/',
+                        cwd=working_dir,
+                    ),
+
+                    #  Install
+                    ec2.InitCommand.shell_command(
+                        "sudo ./sam-installation/install",
+                        cwd=working_dir,
+                    ),
+
+                    #  Check version
+                    ec2.InitCommand.shell_command(
+                        "sam --version",
+                        cwd=working_dir,
+                    ),
+                ]),
+                'cfn-cli': ec2.InitConfig([
+                    # Pin dependencies' versions to workaround conflicts
+                    #
+                    # https://stackoverflow.com/a/73199422
+                    # https://github.com/aws-cloudformation/cloudformation-cli/issues/864
+                    # https://github.com/aws-cloudformation/cloudformation-cli/issues/899
+                    ec2.InitCommand.shell_command(
+                        "pip install --upgrade requests urllib3",
+                        cwd=working_dir,
+                    ),
+                    ec2.InitCommand.shell_command(
+                        "pip install markupsafe==2.0.1 pyyaml==5.4.1",
+                        cwd=working_dir,
+                    ),
+                    ec2.InitCommand.shell_command(
+                        "pip install werkzeug==2.1.2 --no-deps",
+                        cwd=working_dir,
+                    ),
+
+                    #  Install
+                    # https://docs.aws.amazon.com/cloudformation-cli/latest/userguide/what-is-cloudformation-cli.html#resource-type-setup
+                    ec2.InitCommand.shell_command(
+                        "pip install cloudformation-cli cloudformation-cli-java-plugin cloudformation-cli-go-plugin "
+                        "cloudformation-cli-python-plugin cloudformation-cli-typescript-plugin",
+                        cwd=working_dir,
+                    ),
+                ]),
                 'install_snap': ec2.InitConfig([
                     ec2.InitPackage.apt(
                         package_name='snap',
                     ),
                 ]),
-                'install_vnc': ec2.InitConfig([
-                    # https://en.wikipedia.org/wiki/X11vnc
-                    # https://askubuntu.com/questions/229989/how-to-setup-x11vnc-to-access-with-graphical-login-screen/
-
-                    ec2.InitPackage.apt(
-                        package_name='x11vnc',
-                    ),
-
-                    # ec2.InitPackage.apt(
-                    #     package_name='xfce4',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='xfce4-goodies',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='xorg',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='dbus-x11',
-                    # ),
-                    # ec2.InitPackage.apt(
-                    #     package_name='x11-xserver-utils',
-                    # ),
-                ]),
                 'install_mosh': ec2.InitConfig([
                     ec2.InitPackage.apt(
                         package_name='mosh',
                     ),
+                    ec2.InitCommand.shell_command(
+                        shell_command="sudo ufw allow 60000:61000/udp",
+                        cwd=working_dir),
                 ]),
+                'install_ansible': ec2.InitConfig([
+                    # Create a group and user
+                    ec2.InitGroup.from_name("ansibles"),
+                    ec2.InitUser.from_name("ansible"),
+                    ec2.InitCommand.shell_command(
+                        shell_command="pip3 install ansible",
+                        cwd=working_dir),
+                    ec2.InitCommand.shell_command(
+                        shell_command="ansible --version",
+                        cwd=working_dir),
+                    InitFile.from_asset(
+                        '/etc/ansible/hosts',
+                        'assets/ansible/inventory',
+                        group='ansibles',
+                        owner='ansible',
+                        deploy_time=False,
+                    ),
+                    InitFile.from_asset(
+                        '/home/ubuntu/ansible/vnc-playbook.yml',
+                        'assets/ansible/vnc-playbook.yml',
+                        group='ansibles',
+                        owner='ansible',
+                        deploy_time=False,
+                    ),
+                    InitFile.from_asset(
+                        '/home/ubuntu/ansible/roles/vnc/tasks/default.yml',
+                        'assets/ansible/roles/vnc/tasks/default.yml',
+                        group='ansibles',
+                        owner='ansible',
+                        deploy_time=False,
+                    ),
+                    InitFile.from_asset(
+                        '/home/ubuntu/ansible/default.yml',
+                        'assets/ansible/default.yml',
+                        group='ansibles',
+                        owner='ansible',
+                        deploy_time=False,
+                    ),
+                    ec2.InitCommand.shell_command(
+                        shell_command="ansible-playbook default.yml",
+                        cwd='/home/ubuntu/ansible/'),
+                ]),
+
                 'install_cw_agent': ec2.InitConfig([
 
                     # Manually create or edit the CloudWatch agent configuration file
@@ -195,28 +286,31 @@ class TerminalStack(Stack):
 
         init = init_ubuntu
         instance = ec2.Instance(self, "Instance",
-                                user_data_causes_replacement=True,
                                 vpc=vpc,
                                 instance_type=ec2.InstanceType.of(
                                     ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.LARGE),
                                 machine_image=image,
                                 key_name=key_name,
-                                security_group=outer_perimeter_security_group,
+                                security_group=security_group,
                                 role=role,
                                 init=init,
+                                user_data_causes_replacement=True,
 
                                 # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_ec2/ApplyCloudFormationInitOptions.html
                                 init_options=ec2.ApplyCloudFormationInitOptions(
                                     # Optional, which configsets to activate (['default'] by default)
-                                    config_sets=["packaging", "connectivity", 'sysadmin'],
+                                    config_sets=["packaging", "connectivity", 'sysadmin', 'devops'],
 
                                     # Don’t fail the instance creation when cfn-init fails. You can use this to
                                     # prevent CloudFormation from rolling back when instances fail to start up,
                                     # to help in debugging. Default: false
                                     ignore_failures=debug_mode,
 
+                                    # Force instance replacement by embedding a config fingerprint. If true (the default), a hash of the config will be embedded into the UserData, so that if the config changes, the UserData changes.
+                                    embed_fingerprint=True,
+
                                     # Optional, how long the installation is expected to take (5 minutes by default)
-                                    timeout=Duration.minutes(10),
+                                    timeout=Duration.minutes(5),
 
                                     # Optional, whether to include the --url argument when running cfn-init and cfn-signal commands (false by default)
                                     include_url=False,
@@ -274,15 +368,19 @@ class TerminalStack(Stack):
         # TODO Scale out or in based on time.
         # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_autoscaling/AutoScalingGroup.html#aws_cdk.aws_autoscaling.AutoScalingGroup.scale_on_schedule
         # To have a warm pool ready for the day ahead
-
+        self.instance_public_name = instance.instance_public_dns_name
         CfnOutput(self, 'InstancePublicDNSname',
-                  value=instance.instance_public_dns_name,
+                  value=self.instance_public_name,
                   description='Publicly-routable DNS name for this instance.',
                   )
 
         user = 'ubuntu'
-        ssh_command = 'ssh' + ' -i ' + key_name + '.pem ' + user + '@' + instance.instance_public_dns_name
+        self.ssh_command = 'ssh' + ' -v' + ' -i ' + key_name + '.pem ' + user + '@' + self.instance_public_name
         CfnOutput(self, 'InstanceSSHcommand',
-                  value=ssh_command,
+                  value=self.ssh_command,
                   description='Command to SSH into instance.',
                   )
+
+        self.mosh_command = f"mosh --ssh=\"ssh -i {key_name}.pem\" {user}@{self.instance_public_name}"
+        self.mobaxterm_mosh_command = \
+            f"mobaxterm -newtab \"mosh --ssh=\\\"ssh -i {key_name}.pem\\\"\" {user}@{self.instance_public_name}"

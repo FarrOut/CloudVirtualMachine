@@ -1,0 +1,2 @@
+---
+- import_playbook: vnc-playbook.yml
