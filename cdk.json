@@ -1,4 +1,12 @@
 {
+  "profile": "default",
+  "requireApproval": "never",
+  "rollback": true,
+  "tags": [
+    {
+      "Key": "BelongsTo",
+      "Value": "CloudTerminal"
+    }],
   "app": "python app.py",
   "watch": {
     "include": [
