@@ -72,7 +72,7 @@ class TerminalStack(NestedStack):
         ubuntu_image = ec2.LookupMachineImage(
             # Canonical, Ubuntu, 20.04 LTS, amd64 focal image build on 2021-04-30
             # ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-20210430
-            name="ubuntu/images/*ubuntu-*-22.04-*",
+            name="ubuntu/images/*ubuntu-*-23.04*",
             owners=["099720109477"],
             filters={'architecture': ['x86_64']},
             user_data=ubuntu_bootstrapping,
@@ -384,3 +384,8 @@ class TerminalStack(NestedStack):
         self.mosh_command = f"mosh --ssh=\"ssh -i {key_name}.pem\" {user}@{self.instance_public_name}"
         self.mobaxterm_mosh_command = \
             f"mobaxterm -newtab \"mosh --ssh=\\\"ssh -i {key_name}.pem\\\"\" {user}@{self.instance_public_name}"
+
+        ansible_path = 'assets/ansible'
+        ansible_inventory = f'-i {ansible_path}/inventory'
+        ansible_playbook = f'{ansible_path}/default.yml'
+        self.local_ansible_command = f'ansible-playbook {ansible_inventory} {ansible_playbook} --extra-vars "variable_host={self.instance_public_name}"'
