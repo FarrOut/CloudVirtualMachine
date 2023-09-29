@@ -37,3 +37,7 @@ class CloudTerminal(Stack):
                   value=terminals.mobaxterm_mosh_command,
                   description='Command to create new SSH session over MOSH via MobaXTerm.',
                   )
+        CfnOutput(self, 'LocalAnsibleCommand',
+                  value=terminals.local_ansible_command,
+                  description='Command to execute Ansible playbooks from a local machine on the VM.',
+                  )        
